@@ -100,12 +100,30 @@
     <div id="status"></div>
 
     <script>
+        // 使用 google.script.run.withUserObject 来缓存对话框状态
+        var dialogState = {
+            isLoading: false
+        };
+
         // 初始化时设置当前活动表格
-        google.script.run
-            .withSuccessHandler(function (result) {
-                loadSheets(result.sheets, result.activeSheet);
-            })
-            .getSheetInfo();
+        function initialize() {
+            if (dialogState.isLoading) return;
+            dialogState.isLoading = true;
+
+            google.script.run
+                .withSuccessHandler(function (result) {
+                    loadSheets(result.sheets, result.activeSheet);
+                    dialogState.isLoading = false;
+                })
+                .withFailureHandler(function (error) {
+                    showStatus('加载失败: ' + error, true);
+                    dialogState.isLoading = false;
+                })
+                .getSheetInfo();
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', initialize);
 
         function loadSheets(sheets, activeSheet) {
             var sheet1Select = document.getElementById('sheet1');
@@ -130,6 +148,8 @@
         }
 
         function runComparison() {
+            if (dialogState.isLoading) return;
+
             var config = {
                 sheet1: document.getElementById('sheet1').value,
                 sheet2: document.getElementById('sheet2').value
@@ -140,19 +160,27 @@
                 return;
             }
 
+            dialogState.isLoading = true;
             showStatus('正在比较...', false);
+
+            // 禁用按钮，防止重复点击
+            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
 
             google.script.run
                 .withSuccessHandler(function (result) {
                     if (result.success) {
                         showStatus(result.message, false);
-                        setTimeout(closeDialog, 3000);
+                        setTimeout(closeDialog, 2000);
                     } else {
                         showStatus(result.message, true);
                     }
+                    dialogState.isLoading = false;
+                    document.querySelectorAll('button').forEach(btn => btn.disabled = false);
                 })
                 .withFailureHandler(function (error) {
                     showStatus('发生错误: ' + error, true);
+                    dialogState.isLoading = false;
+                    document.querySelectorAll('button').forEach(btn => btn.disabled = false);
                 })
                 .compareSheets(config);
         }

@@ -6,18 +6,31 @@ function getSheetNames() {
   });
 }
 
-// 获取表格信息
+// 获取表格信息 - 添加缓存
 function getSheetInfo() {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'sheet_info';
+  var cached = cache.get(cacheKey);
+  
+  if (cached != null) {
+    return JSON.parse(cached);
+  }
+  
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var activeSheet = ss.getActiveSheet().getName();
   var sheets = ss.getSheets().map(function(sheet) {
     return sheet.getName();
   });
   
-  return {
+  var result = {
     sheets: sheets,
     activeSheet: activeSheet
   };
+  
+  // 缓存结果10分钟
+  cache.put(cacheKey, JSON.stringify(result), 600);
+  
+  return result;
 }
 
 // 创建自定义菜单
@@ -37,7 +50,7 @@ function showCompareDialog() {
   SpreadsheetApp.getUi().showModalDialog(html, '表格比较配置');
 }
 
-// 执行比较操作
+// 执行比较操作 - 优化数据处理
 function compareSheets(config) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet1 = ss.getSheetByName(config.sheet1);
@@ -57,25 +70,30 @@ function compareSheets(config) {
   }
 
   try {
-    // 获取两个表格的数据范围
+    // 批量获取数据以减少API调用
     var range1 = sheet1.getDataRange();
     var range2 = sheet2.getDataRange();
+    
+    var [data1, backgrounds1, notes1] = [
+      range1.getValues(),
+      range1.getBackgrounds(),
+      range1.getNotes()
+    ];
+    
+    var data2 = range2.getValues();
     
     // 获取表头数据
     var headers1 = sheet1.getRange(1, 1, 1, range1.getNumColumns()).getValues()[0];
     var headers2 = sheet2.getRange(1, 1, 1, range2.getNumColumns()).getValues()[0];
     
-    // 创建表头映射关系
+    // 使用对象来存储表头映射，提高查找效率
     var headerMap = {};
     var unmatchedHeaders1 = [];
     var unmatchedHeaders2 = [];
     
     // 记录表头1中的列索引
     headers1.forEach((header, index) => {
-      headerMap[header] = {
-        sheet1Index: index,
-        sheet2Index: -1
-      };
+      headerMap[header] = {sheet1Index: index, sheet2Index: -1};
     });
     
     // 查找表头2中对应的列索引
@@ -119,8 +137,8 @@ function compareSheets(config) {
     }
 
     // 检查是否存在之前的比较标记
-    var backgrounds = range1.getBackgrounds();
-    var notes = range1.getNotes();
+    var backgrounds = backgrounds1;
+    var notes = notes1;
     var hasExistingMarks = false;
 
     // 检查是否存在比较标记
@@ -227,10 +245,10 @@ function compareSheets(config) {
       notes.push(noteRow);
     }
 
-    // 批量更新单元格背景色和注释
-    var range = sheet1.getRange(1, 1, rows, cols);
-    range.setBackgrounds(backgroundColors);
-    range.setNotes(notes);
+    // 批量更新以减少API调用
+    var updateRange = sheet1.getRange(1, 1, rows, cols);
+    updateRange.setBackgrounds(backgroundColors);
+    updateRange.setNotes(notes);
 
     // 更新比较信息
     var infoNote = "最近比较时间: " + new Date().toLocaleString() + "\n" +
@@ -319,18 +337,4 @@ function clearAllHighlights(showConfirm = true) {
   if (showConfirm) {
     ui.alert('完成', '比较标记已清除', ui.ButtonSet.OK);
   }
-}
-
-// 获取表格信息
-function getSheetInfo() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var activeSheet = ss.getActiveSheet().getName();
-  var sheets = ss.getSheets().map(function(sheet) {
-    return sheet.getName();
-  });
-  
-  return {
-    sheets: sheets,
-    activeSheet: activeSheet
-  };
 }
