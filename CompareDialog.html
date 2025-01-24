@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        select,
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+
+        .button-group {
+            text-align: right;
+            margin-top: 25px;
+        }
+
+        button {
+            padding: 8px 20px;
+            margin-left: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        button.primary {
+            background-color: #4285f4;
+            color: white;
+        }
+
+        button.secondary {
+            background-color: #f1f3f4;
+            color: #333;
+        }
+
+        #status {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 4px;
+            display: none;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .color-preview {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 10px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="form-group">
+        <label>当前表格:</label>
+        <select id="sheet1" disabled></select>
+        <div class="help-text">将在此表格上显示差异</div>
+    </div>
+
+    <div class="form-group">
+        <label>对比表格:</label>
+        <select id="sheet2"></select>
+        <div class="help-text">选择要与当前表格进行对比的表格</div>
+    </div>
+
+    <div class="button-group">
+        <button class="secondary" onclick="closeDialog()">取消</button>
+        <button class="primary" onclick="runComparison()">开始比较</button>
+    </div>
+
+    <div id="status"></div>
+
+    <script>
+        // 初始化时设置当前活动表格
+        google.script.run
+            .withSuccessHandler(function (result) {
+                loadSheets(result.sheets, result.activeSheet);
+            })
+            .getSheetInfo();
+
+        function loadSheets(sheets, activeSheet) {
+            var sheet1Select = document.getElementById('sheet1');
+            var sheet2Select = document.getElementById('sheet2');
+
+            sheets.forEach(function (sheet) {
+                if (sheet !== activeSheet) {
+                    sheet2Select.options.add(new Option(sheet, sheet));
+                }
+            });
+
+            sheet1Select.options.add(new Option(activeSheet, activeSheet));
+            sheet1Select.value = activeSheet;
+        }
+
+        function showStatus(message, isError) {
+            var status = document.getElementById('status');
+            status.style.display = 'block';
+            status.style.backgroundColor = isError ? '#ffebee' : '#e8f5e9';
+            status.style.border = '1px solid ' + (isError ? '#ef9a9a' : '#a5d6a7');
+            status.innerHTML = message.replace(/\n/g, '<br>');
+        }
+
+        function runComparison() {
+            var config = {
+                sheet1: document.getElementById('sheet1').value,
+                sheet2: document.getElementById('sheet2').value
+            };
+
+            if (config.sheet1 === config.sheet2) {
+                showStatus('请选择不同的表格进行比较', true);
+                return;
+            }
+
+            showStatus('正在比较...', false);
+
+            google.script.run
+                .withSuccessHandler(function (result) {
+                    if (result.success) {
+                        showStatus(result.message, false);
+                        setTimeout(closeDialog, 3000);
+                    } else {
+                        showStatus(result.message, true);
+                    }
+                })
+                .withFailureHandler(function (error) {
+                    showStatus('发生错误: ' + error, true);
+                })
+                .compareSheets(config);
+        }
+
+        function closeDialog() {
+            google.script.host.close();
+        }
+    </script>
+</body>
+
+</html>
