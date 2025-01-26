@@ -1,3 +1,15 @@
+// 全局常量定义
+const COMPARE_CONSTANTS = {
+  COLORS: {
+    MODIFIED: "#ffcdd2",  // 修改 - 浅红色
+    ADDED: "#c8e6c9",    // 新增 - 浅绿色
+    REMOVED: "#ffdce0",  // 删除 - Git 风格的浅红色（略微不同的色调）
+    HEADER_MODIFIED: "#fff9c4"  // 表头修改 - 浅黄色
+  },
+  CACHE_DURATION: 600,
+  // 其他配置...
+};
+
 // 获取所有表格名称
 function getSheetNames() {
   var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
@@ -67,16 +79,6 @@ function compareSheets(config) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet1 = ss.getSheetByName(config.sheet1);
   var sheet2 = ss.getSheetByName(config.sheet2);
-  
-  const COMPARE_CONSTANTS = {
-    COLORS: {
-      MODIFIED: "#ffcdd2",
-      ADDED: "#c8e6c9",
-      HEADER_MODIFIED: "#fff9c4"
-    },
-    CACHE_DURATION: 600,
-    // 其他配置...
-  };
   
   if (!sheet1 || !sheet2) {
     return {
@@ -198,6 +200,7 @@ function compareSheets(config) {
       modified: 0,
       missing: 0,
       added: 0,
+      removed: 0,  // 新增：记录删除的行数
       headerDiff: unmatchedHeaders1.length + unmatchedHeaders2.length
     };
 
@@ -222,10 +225,24 @@ function compareSheets(config) {
     backgroundColors.push(headerBackgrounds);
     notes.push(headerNotes);
 
+    // 记录已处理的行（用于后续检查删除的行）
+    var processedRows = new Set();
+
     // 处理数据行
     for(var i = 1; i < rows; i++) {
       var backgroundRow = [];
       var noteRow = [];
+      
+      // 记录这一行的内容用于后续比较
+      var rowContent = '';
+      for(var j = 0; j < cols; j++) {
+        var sheet2Col = headerMap[headers1[j]].sheet2Index;
+        if (sheet2Col !== -1) {
+          rowContent += data1[i][j] + '|';
+        }
+      }
+      processedRows.add(rowContent);
+
       for(var j = 0; j < cols; j++) {
         var header = headers1[j];
         var sheet2Col = headerMap[header].sheet2Index;
@@ -257,10 +274,46 @@ function compareSheets(config) {
       notes.push(noteRow);
     }
 
+    // 检查B表中存在而A表中不存在的行
+    for(var i = 1; i < data2.length; i++) {
+      var rowContent = '';
+      for(var j = 0; j < data2[i].length; j++) {
+        rowContent += data2[i][j] + '|';
+      }
+      
+      if (!processedRows.has(rowContent)) {
+        differences.removed++;
+        differences.total++;
+        
+        // 将删除的行添加到结果中
+        var removedRow = [];
+        var removedNote = [];
+        var dataRow = new Array(cols).fill('');
+        
+        for(var j = 0; j < cols; j++) {
+          removedRow.push(COMPARE_CONSTANTS.COLORS.REMOVED);  // 使用删除专用的颜色
+          var sheet2Col = headerMap[headers1[j]].sheet2Index;
+          if (sheet2Col !== -1) {
+            var value = data2[i][sheet2Col];
+            dataRow[j] = value;
+            removedNote.push("此行在基准表中不存在\n对比表中的值: " + value);
+          } else {
+            removedNote.push("此行在基准表中不存在");
+          }
+        }
+        
+        backgroundColors.push(removedRow);
+        notes.push(removedNote);
+        data1.push(dataRow);
+        rows++;
+      }
+    }
+
     // 批量更新以减少API调用
     var updateRange = sheet1.getRange(1, 1, rows, cols);
     updateRange.setBackgrounds(backgroundColors);
     updateRange.setNotes(notes);
+    updateRange.setValues(data1);  // 更新包括新添加的行
 
     // 更新比较信息
     var infoNote = "最近比较时间: " + new Date().toLocaleString() + "\n" +
@@ -268,13 +321,14 @@ function compareSheets(config) {
                    "差异总数: " + differences.total + "\n" +
                    "└─ 值不同: " + differences.modified + "\n" +
                    "└─ 新增项: " + differences.added + "\n" +
+                   "└─ 删除项: " + differences.removed + "\n" +
                    "└─ 表头差异: " + differences.headerDiff;
     
     sheet1.getRange(1, 1).setNote(infoNote);
 
     return {
       success: true,
-      message: `比较完成！\n发现 ${differences.total} 处差异\n${differences.modified} 处值不同\n${differences.added} 处新增\n${differences.headerDiff} 处表头差异`,
+      message: `比较完成！\n发现 ${differences.total} 处差异\n${differences.modified} 处值不同\n${differences.added} 处新增\n${differences.removed} 处删除\n${differences.headerDiff} 处表头差异`,
       differences: differences
     };
   } catch (error) {
@@ -300,53 +354,100 @@ function clearAllHighlights(showConfirm = true) {
       return;
     }
   }
-
+  
   var sheet = SpreadsheetApp.getActiveSheet();
   var range = sheet.getDataRange();
   var backgrounds = range.getBackgrounds();
   var notes = range.getNotes();
-  var rows = range.getNumRows();
-  var cols = range.getNumColumns();
+  var values = range.getValues();
   
-  // 创建新的背景色和注释数组
   var newBackgrounds = [];
   var newNotes = [];
+  var newValues = [];
+  var rowsToKeep = [];
   
-  // 遍历所有单元格
-  for (var i = 0; i < rows; i++) {
-    var backgroundRow = [];
-    var noteRow = [];
-    for (var j = 0; j < cols; j++) {
+  // 检查每一行，标记需要保留的行
+  for (var i = 0; i < backgrounds.length; i++) {
+    var isDeletedRow = true;
+    var hasHighlight = false;
+    
+    // 检查这一行是否是比较时新增的行（通过检查背景色和注释）
+    for (var j = 0; j < backgrounds[i].length; j++) {
       var currentBg = backgrounds[i][j];
       var currentNote = notes[i][j];
       
-      // 清除比较功能产生的所有标记颜色（包括表头差异的黄色标记）
-      if (currentBg === "#ffcdd2" || currentBg === "#c8e6c9" || currentBg === "#fff9c4") {
-        backgroundRow.push(null);
-      } else {
-        backgroundRow.push(currentBg);
+      if (currentBg === COMPARE_CONSTANTS.COLORS.REMOVED) {
+        hasHighlight = true;
       }
       
-      // 清除包含比较相关文字的注释
-      if (currentNote && (currentNote.includes("当前值:") || 
-          currentNote.includes("对比值:") || 
-          currentNote.includes("在对比表格中未找到对应数据") ||
-          currentNote.includes("最近比较时间:") ||
-          currentNote.includes("此列在对比表格中不存在"))) {  // 添加表头差异的注释判断
-        noteRow.push("");
-      } else {
-        noteRow.push(currentNote);
+      if (currentNote && currentNote.includes("此行在基准表中不存在")) {
+        hasHighlight = true;
+      }
+      
+      // 如果这一行有任何非高亮的单元格，说明不是新增的行
+      if (currentBg !== COMPARE_CONSTANTS.COLORS.REMOVED && 
+          currentBg !== COMPARE_CONSTANTS.COLORS.MODIFIED && 
+          currentBg !== COMPARE_CONSTANTS.COLORS.ADDED && 
+          currentBg !== COMPARE_CONSTANTS.COLORS.HEADER_MODIFIED) {
+        isDeletedRow = false;
       }
     }
-    newBackgrounds.push(backgroundRow);
-    newNotes.push(noteRow);
+    
+    // 如果这一行不是新增的行，或者是第一行（表头），就保留它
+    if (!isDeletedRow || !hasHighlight || i === 0) {
+      rowsToKeep.push(i);
+      
+      var backgroundRow = [];
+      var noteRow = [];
+      
+      for (var j = 0; j < backgrounds[i].length; j++) {
+        var currentBg = backgrounds[i][j];
+        var currentNote = notes[i][j];
+        
+        // 清除所有比较标记的背景色
+        if (currentBg === COMPARE_CONSTANTS.COLORS.MODIFIED || 
+            currentBg === COMPARE_CONSTANTS.COLORS.ADDED || 
+            currentBg === COMPARE_CONSTANTS.COLORS.REMOVED || 
+            currentBg === COMPARE_CONSTANTS.COLORS.HEADER_MODIFIED) {
+          backgroundRow.push(null);
+        } else {
+          backgroundRow.push(currentBg);
+        }
+        
+        // 清除所有比较相关的注释
+        if (currentNote && (
+            currentNote.includes("当前值:") || 
+            currentNote.includes("对比值:") || 
+            currentNote.includes("在对比表格中未找到对应数据") ||
+            currentNote.includes("最近比较时间:") ||
+            currentNote.includes("此列在对比表格中不存在") ||
+            currentNote.includes("此行在基准表中不存在"))) {
+          noteRow.push("");
+        } else {
+          noteRow.push(currentNote);
+        }
+      }
+      
+      newBackgrounds.push(backgroundRow);
+      newNotes.push(noteRow);
+      newValues.push(values[i]);
+    }
   }
   
-  // 批量更新
-  range.setBackgrounds(newBackgrounds);
-  range.setNotes(newNotes);
-  
-  if (showConfirm) {
-    ui.alert('完成', '比较标记已清除', ui.ButtonSet.OK);
+  // 如果有行被删除，更新表格
+  if (rowsToKeep.length < backgrounds.length) {
+    var newRange = sheet.getRange(1, 1, newBackgrounds.length, backgrounds[0].length);
+    newRange.setBackgrounds(newBackgrounds);
+    newRange.setNotes(newNotes);
+    newRange.setValues(newValues);
+    
+    // 删除多余的行
+    if (backgrounds.length > newBackgrounds.length) {
+      sheet.deleteRows(newBackgrounds.length + 1, backgrounds.length - newBackgrounds.length);
+    }
+  } else {
+    // 如果没有行被删除，只更新背景色和注释
+    range.setBackgrounds(newBackgrounds);
+    range.setNotes(newNotes);
   }
 }
