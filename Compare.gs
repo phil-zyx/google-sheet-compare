@@ -27,7 +27,8 @@ function getSheetInfo() {
     activeSheet: activeSheet
   };
   
-  // 缓存结果10分钟
+  // 缓存时间可能需要根据实际使用情况调整
+  // 10分钟可能太长或太短，建议作为可配置项
   cache.put(cacheKey, JSON.stringify(result), 600);
   
   return result;
@@ -44,6 +45,10 @@ function onOpen() {
 
 // 显示配置对话框
 function showCompareDialog() {
+  // 每次打开对话框时清除缓存，确保获取最新数据
+  var cache = CacheService.getScriptCache();
+  cache.remove('sheet_info');
+  
   var html = HtmlService.createHtmlOutputFromFile('CompareDialog')
     .setWidth(400)
     .setHeight(300);
@@ -52,14 +57,25 @@ function showCompareDialog() {
 
 // 执行比较操作 - 优化数据处理
 function compareSheets(config) {
+  // 应该添加输入验证
+  if (!config || !config.sheet1 || !config.sheet2) {
+    return {
+      success: false,
+      message: "配置参数无效"
+    };
+  }
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet1 = ss.getSheetByName(config.sheet1);
   var sheet2 = ss.getSheetByName(config.sheet2);
   
-  const COLORS = {
-    MODIFIED: "#ffcdd2",  // 红色 - 修改
-    ADDED: "#c8e6c9",     // 绿色 - 新增
-    HEADER_MODIFIED: "#fff9c4", // 黄色 - 表头变更
+  const COMPARE_CONSTANTS = {
+    COLORS: {
+      MODIFIED: "#ffcdd2",
+      ADDED: "#c8e6c9",
+      HEADER_MODIFIED: "#fff9c4"
+    },
+    CACHE_DURATION: 600,
+    // 其他配置...
   };
   
   if (!sheet1 || !sheet2) {
@@ -144,7 +160,7 @@ function compareSheets(config) {
     // 检查是否存在比较标记
     for (var i = 0; i < backgrounds.length && !hasExistingMarks; i++) {
       for (var j = 0; j < backgrounds[i].length && !hasExistingMarks; j++) {
-        if (backgrounds[i][j] === COLORS.MODIFIED || backgrounds[i][j] === COLORS.ADDED ||
+        if (backgrounds[i][j] === COMPARE_CONSTANTS.COLORS.MODIFIED || backgrounds[i][j] === COMPARE_CONSTANTS.COLORS.ADDED ||
             (notes[i][j] && (notes[i][j].includes("当前值:") || 
              notes[i][j].includes("对比值:") || 
              notes[i][j].includes("在对比表中未找到对应数据") ||
@@ -174,10 +190,6 @@ function compareSheets(config) {
       clearAllHighlights(false); // 传入 false 表示不显示确认对话框
     }
 
-    // 获取数据
-    var data1 = sheet1.getDataRange().getValues();
-    var data2 = sheet2.getDataRange().getValues();
-    
     // 获取当前背景色
     var currentBackgrounds = sheet1.getDataRange().getBackgrounds();
     
@@ -200,7 +212,7 @@ function compareSheets(config) {
     var headerNotes = [];
     for (var j = 0; j < cols; j++) {
       if (headerMap[headers1[j]].sheet2Index === -1) {
-        headerBackgrounds.push(COLORS.HEADER_MODIFIED);
+        headerBackgrounds.push(COMPARE_CONSTANTS.COLORS.HEADER_MODIFIED);
         headerNotes.push("此列在对比表格中不存在");
       } else {
         headerBackgrounds.push(currentBackgrounds[0][j]);
@@ -220,13 +232,13 @@ function compareSheets(config) {
         
         if (sheet2Col === -1) {
           // 此列在表格2中不存在
-          backgroundRow.push(COLORS.ADDED);
+          backgroundRow.push(COMPARE_CONSTANTS.COLORS.ADDED);
           noteRow.push("此列在对比表格中不存在");
           differences.added++;
           differences.total++;
         } else if (i < data2.length) {
           if (data1[i][j] !== data2[i][sheet2Col]) {
-            backgroundRow.push(COLORS.MODIFIED);
+            backgroundRow.push(COMPARE_CONSTANTS.COLORS.MODIFIED);
             noteRow.push("当前值: " + data1[i][j] + "\n对比值: " + data2[i][sheet2Col]);
             differences.modified++;
             differences.total++;
@@ -235,7 +247,7 @@ function compareSheets(config) {
             noteRow.push(null);
           }
         } else {
-          backgroundRow.push(COLORS.ADDED);
+          backgroundRow.push(COMPARE_CONSTANTS.COLORS.ADDED);
           noteRow.push("在对比表格中未找到对应数据");
           differences.added++;
           differences.total++;

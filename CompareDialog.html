@@ -76,118 +76,246 @@
             margin-left: 10px;
             border: 1px solid #ddd;
         }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 添加骨架屏样式 */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+            height: 36px;
+            margin-bottom: 8px;
+        }
+
+        @keyframes loading {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        /* 添加淡入效果 */
+        .fade-in {
+            opacity: 0;
+            transition: opacity 0.3s ease-in;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+        }
     </style>
 </head>
 
 <body>
-    <div class="form-group">
-        <label>当前表格:</label>
-        <select id="sheet1" disabled></select>
-        <div class="help-text">将在此表格上显示差异</div>
+    <!-- 添加骨架屏 -->
+    <div id="skeleton">
+        <div class="form-group">
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+        </div>
+        <div class="form-group">
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+        </div>
     </div>
 
-    <div class="form-group">
-        <label>对比表格:</label>
-        <select id="sheet2"></select>
-        <div class="help-text">选择要与当前表格进行对比的表格</div>
-    </div>
+    <!-- 主要内容区域 -->
+    <div id="content" class="fade-in" style="display: none;">
+        <div class="form-group">
+            <label>当前表格:</label>
+            <select id="sheet1" disabled></select>
+            <div class="help-text">将在此表格上显示差异</div>
+        </div>
 
-    <div class="button-group">
-        <button class="secondary" onclick="closeDialog()">取消</button>
-        <button class="primary" onclick="runComparison()">开始比较</button>
-    </div>
+        <div class="form-group">
+            <label>对比表格:</label>
+            <select id="sheet2"></select>
+            <div class="help-text">选择要与当前表格进行对比的表格</div>
+        </div>
 
-    <div id="status"></div>
+        <div class="button-group">
+            <button class="secondary" onclick="closeDialog()">取消</button>
+            <button class="primary" onclick="runComparison()">开始比较</button>
+        </div>
+
+        <div id="status"></div>
+    </div>
 
     <script>
-        // 使用 google.script.run.withUserObject 来缓存对话框状态
-        var dialogState = {
-            isLoading: false
-        };
-
-        // 初始化时设置当前活动表格
-        function initialize() {
-            if (dialogState.isLoading) return;
-            dialogState.isLoading = true;
-
-            google.script.run
-                .withSuccessHandler(function (result) {
-                    loadSheets(result.sheets, result.activeSheet);
-                    dialogState.isLoading = false;
-                })
-                .withFailureHandler(function (error) {
-                    showStatus('加载失败: ' + error, true);
-                    dialogState.isLoading = false;
-                })
-                .getSheetInfo();
-        }
-
-        // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', initialize);
-
-        function loadSheets(sheets, activeSheet) {
-            var sheet1Select = document.getElementById('sheet1');
-            var sheet2Select = document.getElementById('sheet2');
-
-            sheets.forEach(function (sheet) {
-                if (sheet !== activeSheet) {
-                    sheet2Select.options.add(new Option(sheet, sheet));
-                }
-            });
-
-            sheet1Select.options.add(new Option(activeSheet, activeSheet));
-            sheet1Select.value = activeSheet;
-        }
-
-        function showStatus(message, isError) {
-            var status = document.getElementById('status');
-            status.style.display = 'block';
-            status.style.backgroundColor = isError ? '#ffebee' : '#e8f5e9';
-            status.style.border = '1px solid ' + (isError ? '#ef9a9a' : '#a5d6a7');
-            status.innerHTML = message.replace(/\n/g, '<br>');
-        }
-
-        function runComparison() {
-            if (dialogState.isLoading) return;
-
-            var config = {
-                sheet1: document.getElementById('sheet1').value,
-                sheet2: document.getElementById('sheet2').value
+        // 使用立即执行函数来避免全局变量污染
+        (function () {
+            // 缓存DOM引用
+            const elements = {
+                sheet1: null,
+                sheet2: null,
+                status: null,
+                skeleton: null,
+                content: null,
+                buttons: null
             };
 
-            if (config.sheet1 === config.sheet2) {
-                showStatus('请选择不同的表格进行比较', true);
-                return;
+            // 状态管理
+            const state = {
+                isLoading: false,
+                sheets: null,
+                activeSheet: null
+            };
+
+            // 初始化函数
+            function init() {
+                // 缓存DOM元素
+                elements.sheet1 = document.getElementById('sheet1');
+                elements.sheet2 = document.getElementById('sheet2');
+                elements.status = document.getElementById('status');
+                elements.skeleton = document.getElementById('skeleton');
+                elements.content = document.getElementById('content');
+                elements.buttons = document.querySelectorAll('button');
+
+                // 移除sessionStorage缓存检查，始终重新加载数据
+                loadSheetInfo();
             }
 
-            dialogState.isLoading = true;
-            showStatus('正在比较...', false);
+            // 加载表格信息
+            function loadSheetInfo() {
+                if (state.isLoading) return;
+                state.isLoading = true;
 
-            // 禁用按钮，防止重复点击
-            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        loadSheets(result.sheets, result.activeSheet);
+                        showContent();
+                        state.isLoading = false;
+                    })
+                    .withFailureHandler(function (error) {
+                        showStatus('加载失败: ' + error, true);
+                        state.isLoading = false;
+                    })
+                    .getSheetInfo();
+            }
 
-            google.script.run
-                .withSuccessHandler(function (result) {
-                    if (result.success) {
-                        showStatus(result.message, false);
-                        setTimeout(closeDialog, 2000);
-                    } else {
-                        showStatus(result.message, true);
+            // 显示主要内容
+            function showContent() {
+                elements.skeleton.style.display = 'none';
+                elements.content.style.display = 'block';
+                // 使用 requestAnimationFrame 确保过渡效果正常执行
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        elements.content.classList.add('visible');
+                    });
+                });
+            }
+
+            // 加载表格选项
+            function loadSheets(sheets, activeSheet) {
+                // 清空现有选项
+                elements.sheet1.innerHTML = '';
+                elements.sheet2.innerHTML = '';
+
+                // 使用 DocumentFragment 优化DOM操作
+                const sheet2Fragment = document.createDocumentFragment();
+
+                sheets.forEach(function (sheet) {
+                    if (sheet !== activeSheet) {
+                        sheet2Fragment.appendChild(new Option(sheet, sheet));
                     }
-                    dialogState.isLoading = false;
-                    document.querySelectorAll('button').forEach(btn => btn.disabled = false);
-                })
-                .withFailureHandler(function (error) {
-                    showStatus('发生错误: ' + error, true);
-                    dialogState.isLoading = false;
-                    document.querySelectorAll('button').forEach(btn => btn.disabled = false);
-                })
-                .compareSheets(config);
-        }
+                });
 
-        function closeDialog() {
-            google.script.host.close();
-        }
+                elements.sheet1.appendChild(new Option(activeSheet, activeSheet));
+                elements.sheet2.appendChild(sheet2Fragment);
+
+                elements.sheet1.value = activeSheet;
+            }
+
+            // 运行比较
+            function runComparison() {
+                if (state.isLoading) return;
+
+                const config = {
+                    sheet1: elements.sheet1.value,
+                    sheet2: elements.sheet2.value
+                };
+
+                if (config.sheet1 === config.sheet2) {
+                    showStatus('请选择不同的表格进行比较', true);
+                    return;
+                }
+
+                state.isLoading = true;
+                showStatus('正在比较...', false);
+
+                // 禁用按钮
+                elements.buttons.forEach(btn => btn.disabled = true);
+
+                google.script.run
+                    .withSuccessHandler(handleComparisonSuccess)
+                    .withFailureHandler(handleComparisonError)
+                    .compareSheets(config);
+            }
+
+            // 处理比较成功
+            function handleComparisonSuccess(result) {
+                if (result.success) {
+                    showStatus(result.message, false);
+                    setTimeout(closeDialog, 2000);
+                } else {
+                    showStatus(result.message, true);
+                }
+                state.isLoading = false;
+                elements.buttons.forEach(btn => btn.disabled = false);
+            }
+
+            // 处理比较错误
+            function handleComparisonError(error) {
+                showStatus('发生错误: ' + error, true);
+                state.isLoading = false;
+                elements.buttons.forEach(btn => btn.disabled = false);
+            }
+
+            // 显示状态信息
+            function showStatus(message, isError) {
+                elements.status.style.display = 'block';
+                elements.status.style.backgroundColor = isError ? '#ffebee' : '#e8f5e9';
+                elements.status.style.border = '1px solid ' + (isError ? '#ef9a9a' : '#a5d6a7');
+                elements.status.innerHTML = state.isLoading ?
+                    '<div class="spinner"></div> ' + message :
+                    message.replace(/\n/g, '<br>');
+            }
+
+            // 关闭对话框
+            function closeDialog() {
+                google.script.host.close();
+            }
+
+            // 暴露必要的函数到全局作用域
+            window.runComparison = runComparison;
+            window.closeDialog = closeDialog;
+
+            // 页面加载完成后初始化
+            document.addEventListener('DOMContentLoaded', init);
+        })();
     </script>
 </body>
 
