@@ -51,8 +51,19 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('表格比较工具')
     .addItem('比较差异', 'showCompareDialog')
+    .addItem('合并表格', 'showMergeDialog')
     .addItem('清除所有标记', 'clearAllHighlights')
     .addToUi();
+}
+
+/**
+ * 显示合并对话框
+ */
+function showMergeDialog() {
+  var html = HtmlService.createHtmlOutputFromFile('MergeDialog')
+    .setWidth(500)
+    .setHeight(600);
+  SpreadsheetApp.getUi().showModalDialog(html, '表格合并工具');
 }
 
 // 显示配置对话框

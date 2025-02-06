@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      .container {
+        padding: 10px;
+        font-family: Arial, sans-serif;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      select, button {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+      }
+      button {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      .conflict-panel {
+        margin-top: 20px;
+        display: none;
+      }
+      .conflict-item {
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+      .conflict-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .conflict-actions button {
+        flex: 1;
+      }
+      .source-value, .target-value {
+        background-color: #f5f5f5;
+        padding: 5px;
+        margin: 5px 0;
+      }
+      .status {
+        margin-top: 10px;
+        padding: 10px;
+        display: none;
+      }
+      .success {
+        background-color: #dff0d8;
+        color: #3c763d;
+      }
+      .error {
+        background-color: #f2dede;
+        color: #a94442;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="form-group">
+        <label for="sourceSheet">源表格:</label>
+        <select id="sourceSheet"></select>
+      </div>
+      <div class="form-group">
+        <label for="targetSheet">目标表格:</label>
+        <select id="targetSheet"></select>
+      </div>
+      <button onclick="startMerge()">开始合并</button>
+      
+      <div id="status" class="status"></div>
+      
+      <div id="conflictPanel" class="conflict-panel">
+        <h3>需要解决的冲突</h3>
+        <div id="conflicts"></div>
+      </div>
+    </div>
+    
+    <script>
+      // 初始化页面
+      function initialize() {
+        // 获取所有表格名称
+        google.script.run
+          .withSuccessHandler(function(sheets) {
+            populateSheets(sheets);
+          })
+          .withFailureHandler(function(error) {
+            showError('加载表格列表失败: ' + error);
+          })
+          .getSheetNames();
+      }
+      
+      // 填充表格选择框
+      function populateSheets(sheets) {
+        var sourceSelect = document.getElementById('sourceSheet');
+        var targetSelect = document.getElementById('targetSheet');
+        
+        // 清空现有选项
+        sourceSelect.innerHTML = '';
+        targetSelect.innerHTML = '';
+        
+        // 添加默认选项
+        sourceSelect.add(new Option('请选择源表格...', ''));
+        targetSelect.add(new Option('请选择目标表格...', ''));
+        
+        // 添加表格选项
+        sheets.forEach(function(sheet) {
+          sourceSelect.add(new Option(sheet, sheet));
+          targetSelect.add(new Option(sheet, sheet));
+        });
+      }
+      
+      // 开始合并
+      function startMerge() {
+        var sourceSheet = document.getElementById('sourceSheet').value;
+        var targetSheet = document.getElementById('targetSheet').value;
+        
+        if (sourceSheet === targetSheet) {
+          showError('源表格和目标表格不能相同');
+          return;
+        }
+        
+        var config = {
+          sourceSheet: sourceSheet,
+          targetSheet: targetSheet
+        };
+        
+        google.script.run
+          .withSuccessHandler(handleMergeResult)
+          .withFailureHandler(showError)
+          .mergeSheets(config);
+      }
+      
+      // 处理合并结果
+      function handleMergeResult(result) {
+        if (!result.success) {
+          showError(result.message);
+          return;
+        }
+        
+        showSuccess(result.message);
+        
+        if (result.result.conflicts.length > 0) {
+          showConflicts(result.result.conflicts);
+        }
+      }
+      
+      // 显示冲突
+      function showConflicts(conflicts) {
+        var conflictPanel = document.getElementById('conflictPanel');
+        var conflictsContainer = document.getElementById('conflicts');
+        conflictPanel.style.display = 'block';
+        conflictsContainer.innerHTML = '';
+        
+        conflicts.forEach(function(conflict, index) {
+          var conflictDiv = document.createElement('div');
+          conflictDiv.className = 'conflict-item';
+          conflictDiv.innerHTML = `
+            <div>位置: 第${conflict.row + 1}行, 第${conflict.col + 1}列</div>
+            <div class="source-value">源值: ${conflict.sourceValue}</div>
+            <div class="target-value">目标值: ${conflict.targetValue}</div>
+            <div class="conflict-actions">
+              <button onclick="resolveConflict(${index}, ${conflict.row}, ${conflict.col}, '${conflict.sourceValue}')">
+                使用源值
+              </button>
+              <button onclick="resolveConflict(${index}, ${conflict.row}, ${conflict.col}, '${conflict.targetValue}')">
+                使用目标值
+              </button>
+            </div>
+          `;
+          conflictsContainer.appendChild(conflictDiv);
+        });
+      }
+      
+      // 解决冲突
+      function resolveConflict(index, row, col, value) {
+        var targetSheet = document.getElementById('targetSheet').value;
+        var config = {
+          sheet: targetSheet,
+          row: row + 1,
+          col: col + 1,
+          value: value
+        };
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (result.success) {
+              var conflictItem = document.getElementsByClassName('conflict-item')[index];
+              conflictItem.style.display = 'none';
+              showSuccess('已解决一个冲突');
+            } else {
+              showError(result.message);
+            }
+          })
+          .withFailureHandler(showError)
+          .resolveConflict(config);
+      }
+      
+      // 显示成功消息
+      function showSuccess(message) {
+        var status = document.getElementById('status');
+        status.className = 'status success';
+        status.style.display = 'block';
+        status.textContent = message;
+      }
+      
+      // 显示错误消息
+      function showError(message) {
+        var status = document.getElementById('status');
+        status.className = 'status error';
+        status.style.display = 'block';
+        status.textContent = message;
+      }
+      
+      // 页面加载完成后初始化
+      google.script.onload = initialize;
+    </script>
+  </body>
+</html>
