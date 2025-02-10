@@ -468,8 +468,10 @@ function clearAllHighlights(showConfirm = true) {
  * 基于当前表格创建新的页签
  */
 function createNewSheetTab() {
+  console.log('开始创建新页签');
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var currentSheet = ss.getActiveSheet();
+  console.log('当前页签:', currentSheet.getName());
   
   // 弹出对话框让用户输入新页签名称
   var ui = SpreadsheetApp.getUi();
@@ -506,11 +508,14 @@ function createNewSheetTab() {
         return sheet.getName() === currentSheet.getName();
       });
       ss.setActiveSheet(newSheet);
+      console.log('切换到新页签:', newSheet.getName());
       ss.moveActiveSheet(currentIndex + 2);
+      console.log('移动页签完成');
       
       // 清除缓存以确保getSheetInfo()返回最新数据
       var cache = CacheService.getScriptCache();
       cache.remove('sheet_info');
+      console.log('清除sheet_info缓存');
       
       ui.alert('成功', '已创建新页签："' + newSheetName + '"', ui.ButtonSet.OK);
     } catch (error) {
