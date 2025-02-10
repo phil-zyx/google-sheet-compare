@@ -49,9 +49,10 @@ function getSheetInfo() {
 // 创建自定义菜单
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('表格比较工具')
+    .createMenu('配置表工具')
     .addItem('比较差异', 'showCompareDialog')
     .addItem('合并表格', 'showMergeDialog')
+    .addItem('新建页签', 'createNewSheetTab')
     .addItem('清除所有标记', 'clearAllHighlights')
     .addToUi();
 }
@@ -460,5 +461,60 @@ function clearAllHighlights(showConfirm = true) {
     // 如果没有行被删除，只更新背景色和注释
     range.setBackgrounds(newBackgrounds);
     range.setNotes(newNotes);
+  }
+}
+
+/**
+ * 基于当前表格创建新的页签
+ */
+function createNewSheetTab() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var currentSheet = ss.getActiveSheet();
+  
+  // 弹出对话框让用户输入新页签名称
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt(
+    '新建页签',
+    '请输入新页签名称：\n(将基于当前页签 "' + currentSheet.getName() + '" 创建)',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  // 处理用户输入
+  if (response.getSelectedButton() == ui.Button.OK) {
+    var newSheetName = response.getResponseText().trim();
+    
+    // 验证输入的名称
+    if (newSheetName === '') {
+      ui.alert('错误', '页签名称不能为空', ui.ButtonSet.OK);
+      return;
+    }
+    
+    // 检查是否已存在同名页签
+    if (ss.getSheetByName(newSheetName)) {
+      ui.alert('错误', '已存在同名页签："' + newSheetName + '"', ui.ButtonSet.OK);
+      return;
+    }
+    
+    try {
+      // 复制当前页签
+      var newSheet = currentSheet.copyTo(ss);
+      newSheet.setName(newSheetName);
+      
+      // 将新页签移动到当前页签后面
+      var sheets = ss.getSheets();
+      var currentIndex = sheets.findIndex(function(sheet) {
+        return sheet.getName() === currentSheet.getName();
+      });
+      ss.setActiveSheet(newSheet);
+      ss.moveActiveSheet(currentIndex + 2);
+      
+      // 清除缓存以确保getSheetInfo()返回最新数据
+      var cache = CacheService.getScriptCache();
+      cache.remove('sheet_info');
+      
+      ui.alert('成功', '已创建新页签："' + newSheetName + '"', ui.ButtonSet.OK);
+    } catch (error) {
+      ui.alert('错误', '创建页签失败：' + error.toString(), ui.ButtonSet.OK);
+    }
   }
 }

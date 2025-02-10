@@ -64,69 +64,130 @@
         background-color: #f2dede;
         color: #a94442;
       }
+      #skeleton {
+        display: block;
+      }
+      #content {
+        display: none;
+      }
     </style>
   </head>
   <body>
     <div class="container">
-      <div class="form-group">
-        <label for="sourceSheet">源表格:</label>
-        <select id="sourceSheet"></select>
+      <!-- 加载状态 -->
+      <div id="skeleton">
+        <p>加载中...</p>
       </div>
-      <div class="form-group">
-        <label for="targetSheet">目标表格:</label>
-        <select id="targetSheet"></select>
-      </div>
-      <button onclick="startMerge()">开始合并</button>
       
-      <div id="status" class="status"></div>
-      
-      <div id="conflictPanel" class="conflict-panel">
-        <h3>需要解决的冲突</h3>
-        <div id="conflicts"></div>
+      <!-- 主要内容 -->
+      <div id="content">
+        <div class="form-group">
+          <label for="sourceSheet">源表格:</label>
+          <select id="sourceSheet"></select>
+        </div>
+        <div class="form-group">
+          <label for="targetSheet">目标表格:</label>
+          <select id="targetSheet"></select>
+        </div>
+        <button onclick="runMerge()">开始合并</button>
+        
+        <div id="status" class="status"></div>
+        
+        <div id="conflictPanel" class="conflict-panel">
+          <h3>需要解决的冲突</h3>
+          <div id="conflicts"></div>
+        </div>
       </div>
     </div>
     
     <script>
-      // 初始化页面
-      function initialize() {
-        // 获取所有表格名称
-        google.script.run
-          .withSuccessHandler(function(sheets) {
-            populateSheets(sheets);
-          })
-          .withFailureHandler(function(error) {
-            showError('加载表格列表失败: ' + error);
-          })
-          .getSheetNames();
+      // 缓存DOM元素
+      const elements = {
+        sourceSheet: null,
+        targetSheet: null,
+        status: null,
+        skeleton: null,
+        content: null,
+        conflictPanel: null,
+        conflicts: null
+      };
+      
+      // 状态管理
+      const state = {
+        isLoading: false,
+        sheets: null
+      };
+      
+      // 初始化函数
+      function init() {
+        // 缓存DOM元素
+        elements.sourceSheet = document.getElementById('sourceSheet');
+        elements.targetSheet = document.getElementById('targetSheet');
+        elements.status = document.getElementById('status');
+        elements.skeleton = document.getElementById('skeleton');
+        elements.content = document.getElementById('content');
+        elements.conflictPanel = document.getElementById('conflictPanel');
+        elements.conflicts = document.getElementById('conflicts');
+        
+        // 加载表格信息
+        loadSheetInfo();
       }
       
-      // 填充表格选择框
-      function populateSheets(sheets) {
-        var sourceSelect = document.getElementById('sourceSheet');
-        var targetSelect = document.getElementById('targetSheet');
+      // 加载表格信息
+      function loadSheetInfo() {
+        if (state.isLoading) return;
+        state.isLoading = true;
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            loadSheets(result.sheets);
+            showContent();
+            state.isLoading = false;
+          })
+          .withFailureHandler(function(error) {
+            showStatus('加载失败: ' + error, true);
+            state.isLoading = false;
+          })
+          .getSheetInfo();
+      }
+      
+      // 显示主要内容
+      function showContent() {
+        elements.skeleton.style.display = 'none';
+        elements.content.style.display = 'block';
+      }
+      
+      // 加载表格选项
+      function loadSheets(sheets) {
+        state.sheets = sheets;
         
         // 清空现有选项
-        sourceSelect.innerHTML = '';
-        targetSelect.innerHTML = '';
+        elements.sourceSheet.innerHTML = '';
+        elements.targetSheet.innerHTML = '';
         
         // 添加默认选项
-        sourceSelect.add(new Option('请选择源表格...', ''));
-        targetSelect.add(new Option('请选择目标表格...', ''));
+        elements.sourceSheet.add(new Option('请选择源表格...', ''));
+        elements.targetSheet.add(new Option('请选择目标表格...', ''));
         
         // 添加表格选项
         sheets.forEach(function(sheet) {
-          sourceSelect.add(new Option(sheet, sheet));
-          targetSelect.add(new Option(sheet, sheet));
+          elements.sourceSheet.add(new Option(sheet, sheet));
+          elements.targetSheet.add(new Option(sheet, sheet));
         });
       }
       
-      // 开始合并
-      function startMerge() {
-        var sourceSheet = document.getElementById('sourceSheet').value;
-        var targetSheet = document.getElementById('targetSheet').value;
+      // 运行合并
+      function runMerge() {
+        var sourceSheet = elements.sourceSheet.value;
+        var targetSheet = elements.targetSheet.value;
+        
+        if (!sourceSheet || !targetSheet) {
+          showStatus('请选择源表格和目标表格', true);
+          return;
+        }
         
         if (sourceSheet === targetSheet) {
-          showError('源表格和目标表格不能相同');
+          showStatus('源表格和目标表格不能相同', true);
           return;
         }
         
@@ -135,32 +196,37 @@
           targetSheet: targetSheet
         };
         
+        showStatus('正在合并...', false);
+        
         google.script.run
-          .withSuccessHandler(handleMergeResult)
-          .withFailureHandler(showError)
+          .withSuccessHandler(handleMergeSuccess)
+          .withFailureHandler(handleMergeError)
           .mergeSheets(config);
       }
       
-      // 处理合并结果
-      function handleMergeResult(result) {
+      // 处理合并成功
+      function handleMergeSuccess(result) {
         if (!result.success) {
-          showError(result.message);
+          showStatus(result.message, true);
           return;
         }
         
-        showSuccess(result.message);
+        showStatus(result.message, false);
         
-        if (result.result.conflicts.length > 0) {
+        if (result.result && result.result.conflicts.length > 0) {
           showConflicts(result.result.conflicts);
         }
       }
       
+      // 处理合并错误
+      function handleMergeError(error) {
+        showStatus('合并失败: ' + error, true);
+      }
+      
       // 显示冲突
       function showConflicts(conflicts) {
-        var conflictPanel = document.getElementById('conflictPanel');
-        var conflictsContainer = document.getElementById('conflicts');
-        conflictPanel.style.display = 'block';
-        conflictsContainer.innerHTML = '';
+        elements.conflictPanel.style.display = 'block';
+        elements.conflicts.innerHTML = '';
         
         conflicts.forEach(function(conflict, index) {
           var conflictDiv = document.createElement('div');
@@ -178,13 +244,13 @@
               </button>
             </div>
           `;
-          conflictsContainer.appendChild(conflictDiv);
+          elements.conflicts.appendChild(conflictDiv);
         });
       }
       
       // 解决冲突
       function resolveConflict(index, row, col, value) {
-        var targetSheet = document.getElementById('targetSheet').value;
+        var targetSheet = elements.targetSheet.value;
         var config = {
           sheet: targetSheet,
           row: row + 1,
@@ -197,33 +263,27 @@
             if (result.success) {
               var conflictItem = document.getElementsByClassName('conflict-item')[index];
               conflictItem.style.display = 'none';
-              showSuccess('已解决一个冲突');
+              showStatus('已解决一个冲突', false);
             } else {
-              showError(result.message);
+              showStatus(result.message, true);
             }
           })
-          .withFailureHandler(showError)
+          .withFailureHandler(function(error) {
+            showStatus('解决冲突失败: ' + error, true);
+          })
           .resolveConflict(config);
       }
       
-      // 显示成功消息
-      function showSuccess(message) {
-        var status = document.getElementById('status');
-        status.className = 'status success';
-        status.style.display = 'block';
+      // 显示状态信息
+      function showStatus(message, isError) {
+        var status = elements.status;
         status.textContent = message;
-      }
-      
-      // 显示错误消息
-      function showError(message) {
-        var status = document.getElementById('status');
-        status.className = 'status error';
+        status.className = 'status ' + (isError ? 'error' : 'success');
         status.style.display = 'block';
-        status.textContent = message;
       }
       
       // 页面加载完成后初始化
-      google.script.onload = initialize;
+      google.script.onload = init;
     </script>
   </body>
 </html>
