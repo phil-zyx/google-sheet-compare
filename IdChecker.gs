@@ -7,90 +7,115 @@ const ID_CHECKER_CONFIG = {
 };
 
 /**
- * 检查当前表格中所有以_INT_id结尾的列的ID冲突
+ * 检查指定ID是否与其他ID冲突
+ * @param {Object} params - 检查参数
+ * @param {string} params.value - 要检查的ID值
+ * @param {string} params.sheet - 工作表名称
+ * @param {number} params.row - 行号
+ * @param {number} params.column - 列号
+ * @param {string} params.columnName - 列名
  */
-function checkIdConflicts() {
+function checkSingleIdConflict(params) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = ss.getSheets();
-  const conflictMap = new Map(); // 用于存储ID及其位置
-  const conflicts = new Set(); // 用于存储冲突的ID
+  const conflicts = [];
   
-  // 第一步：收集所有ID及其位置
+  // 遍历所有表格查找相同ID
   sheets.forEach(sheet => {
     const headerRow = 1;
     const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
     
-    // 找出所有以_INT_id结尾的列
-    headers.forEach((header, columnIndex) => {
-      if (!header || !header.toString().endsWith(ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX)) {
-        return;
-      }
+    // 找到匹配的列索引
+    const columnIndex = headers.findIndex(header => header.toString() === params.columnName);
+    if (columnIndex === -1) return; // 如果这个表格没有匹配的列，直接跳过
+    
+    // 只获取需要的列的数据
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return; // 如果只有表头行，直接跳过
+    
+    const columnData = sheet.getRange(2, columnIndex + 1, lastRow - 1, 1).getValues();
+    
+    // 检查这一列的值
+    columnData.forEach((row, rowIndex) => {
+      const id = row[0];
+      if (!id || id === '') return; // 跳过空ID
       
-      const dataRange = sheet.getDataRange();
-      const values = dataRange.getValues();
-      
-      // 从第二行开始遍历（跳过表头）
-      for (let row = 1; row < values.length; row++) {
-        const id = values[row][columnIndex];
-        if (!id) continue; // 跳过空ID
-        
-        const location = {
+      // 如果找到相同的ID，但不是当前编辑的单元格
+      if (id.toString() === params.value.toString() && 
+          !(sheet.getName() === params.sheet && 
+            rowIndex + 2 === params.row && 
+            columnIndex + 1 === params.column)) {
+        conflicts.push({
           sheet: sheet.getName(),
-          row: row + 1,
-          column: columnIndex + 1,
-          columnName: header.toString()
-        };
-        
-        const key = `${header}_${id}`; // 使用列名和ID组合作为键，这样不同类型的ID就不会互相影响
-        
-        if (conflictMap.has(key)) {
-          conflicts.add(key);
-          conflictMap.get(key).push(location);
-        } else {
-          conflictMap.set(key, [location]);
-        }
+          row: rowIndex + 2,
+          column: columnIndex + 1
+        });
       }
     });
   });
   
-  // 第二步：清除所有现有的冲突标记
-  clearIdConflictHighlights();
+  return conflicts;
+}
+
+/**
+ * 检查当前表格中所有以_INT_id结尾的列的ID冲突
+ * @param {Object} [editedCell] - 如果提供，则只检查这个单元格的ID
+ */
+function checkIdConflicts(editedCell) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 第三步：标记所有冲突
-  conflicts.forEach(key => {
-    const locations = conflictMap.get(key);
-    const [columnName, id] = key.split('_').slice(0, -1).join('_'); // 提取列名（去掉最后的_id）
+  // 如果提供了编辑的单元格信息，只检查这个特定的ID
+  if (editedCell) {
+    const { sheet, range } = editedCell;
+    const headerRange = sheet.getRange(1, range.getColumn());
+    const headerValue = headerRange.getValue();
+    const value = range.getValue();
     
-    locations.forEach(loc => {
-      const sheet = ss.getSheetByName(loc.sheet);
-      const cell = sheet.getRange(loc.row, loc.column);
-      cell.setBackground(ID_CHECKER_CONFIG.COLORS.CONFLICT);
+    if (!value || value === '') {
+      // 如果是删除操作，清除样式和注释
+      range.setBackground(null);
+      range.setNote(null);
+      return;
+    }
+    
+    // 先清除所有冲突标记，确保其他页签上没有残留的标记
+    // clearIdConflictHighlights();
+    
+    // 清除当前单元格的冲突标记
+    range.setBackground(null);
+    
+    // 检查这个特定的ID
+    const conflicts = checkSingleIdConflict({
+      value: value,
+      sheet: sheet.getName(),
+      row: range.getRow(),
+      column: range.getColumn(),
+      columnName: headerValue
+    });
+    
+    if (conflicts.length > 0) {
+      // 只标记当前编辑的单元格
+      range.setBackground(ID_CHECKER_CONFIG.COLORS.CONFLICT);
       
       // 添加注释说明冲突位置
-      const comment = `${columnName} ID冲突: ${id}\n在以下位置重复:\n${
-        locations
-          .filter(l => !(l.sheet === loc.sheet && l.row === loc.row))
-          .map(l => `${l.sheet} 第${l.row}行`)
+      const comment = `${headerValue} ID冲突:\n在以下位置重复:\n${
+        conflicts
+          .map(loc => `${loc.sheet} 第${loc.row}行`)
           .join('\n')
       }`;
-      cell.setNote(comment);
-    });
-  });
-  
-  // 如果有冲突，显示提示
-  if (conflicts.size > 0) {
-    SpreadsheetApp.getActiveSpreadsheet().toast(
-      `发现 ${conflicts.size} 个ID冲突，已用红色标记。`,
-      '警告',
-      5
-    );
-  } else {
-    SpreadsheetApp.getActiveSpreadsheet().toast(
-      '没有发现ID冲突。',
-      '提示',
-      3
-    );
+      range.setNote(comment);
+      
+      SpreadsheetApp.getActiveSpreadsheet().toast(
+        `发现ID冲突，已用红色标记。`,
+        '警告',
+        5
+      );
+    }
+    return;
   }
+  
+  // 如果没有提供编辑的单元格信息，清除所有标记
+  clearIdConflictHighlights();
 }
 
 /**
@@ -144,7 +169,7 @@ function onEdit(e) {
   if (headerValue && headerValue.toString().endsWith(ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX)) {
     // 设置一个短暂的延迟，确保值已经更新
     Utilities.sleep(100);
-    checkIdConflicts();
+    checkIdConflicts({ sheet, range });
   }
 }
 

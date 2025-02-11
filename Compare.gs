@@ -1,69 +1,10 @@
-// 全局常量定义
-const COMPARE_CONSTANTS = {
-  COLORS: {
-    MODIFIED: "#ffcdd2",  // 修改 - 浅红色
-    ADDED: "#c8e6c9",    // 新增 - 浅绿色
-    REMOVED: "#ffdce0",  // 删除 - Git 风格的浅红色（略微不同的色调）
-    HEADER_MODIFIED: "#fff9c4"  // 表头修改 - 浅黄色
-  },
-  CACHE_DURATION: 600,
-  // 其他配置...
-};
-
-// 获取所有表格名称
-function getSheetNames() {
-  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
-  return sheets.map(function(sheet) {
-    return sheet.getName();
-  });
-}
-
-// 获取表格信息 - 添加缓存
-function getSheetInfo() {
-  var cache = CacheService.getScriptCache();
-  var cacheKey = 'sheet_info';
-  var cached = cache.get(cacheKey);
-  
-  if (cached != null) {
-    return JSON.parse(cached);
-  }
-  
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var activeSheet = ss.getActiveSheet().getName();
-  var sheets = ss.getSheets().map(function(sheet) {
-    return sheet.getName();
-  });
-  
-  var result = {
-    sheets: sheets,
-    activeSheet: activeSheet
-  };
-  
-  // 缓存时间可能需要根据实际使用情况调整
-  // 10分钟可能太长或太短，建议作为可配置项
-  cache.put(cacheKey, JSON.stringify(result), 600);
-  
-  return result;
-}
-
-// 创建自定义菜单
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('配置表工具')
-    .addItem('比较差异', 'showCompareDialog')
-    .addItem('合并表格', 'showMergeDialog')
-    .addItem('新建页签', 'createNewSheetTab')
-    .addItem('清除所有标记', 'clearAllHighlights')
-    .addToUi();
-}
-
 /**
  * 显示合并对话框
  */
 function showMergeDialog() {
   var html = HtmlService.createHtmlOutputFromFile('MergeDialog')
     .setWidth(500)
-    .setHeight(600);
+    .setHeight(500);
   SpreadsheetApp.getUi().showModalDialog(html, '表格合并工具');
 }
 
