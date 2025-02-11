@@ -1,14 +1,3 @@
-// 合并相关的常量定义
-const MERGE_CONSTANTS = {
-  COLORS: {
-    NEW: "#c8e6c9",      // 新增行 - 浅绿色
-    CONFLICT: "#ffcdd2", // 冲突 - 浅红色
-    RESOLVED: "#e8f5e9"  // 已解决 - 更浅的绿色
-  },
-  ID_SUFFIX: "_INT_id",  // ID列的后缀
-  CONFLICT_PREFIX: "冲突:\n"
-};
-
 /**
  * 执行合并操作
  * @param {Object} config 合并配置
@@ -36,12 +25,15 @@ function mergeSheets(config, targetSheet) {
   }
 
   try {
-    // 获取两个表的数据
+    // 获取三个表的数据：源表、目标表和基准表（原值）
     var sourceRange = sourceSheet.getDataRange();
     var targetRange = targetSheet.getDataRange();
     
     var sourceData = sourceRange.getValues();
     var targetData = targetRange.getValues();
+    
+    // 获取基准数据（从注释中）
+    var baseData = targetRange.getNotes();
     
     // 获取表头
     var sourceHeaders = sourceData[0];
@@ -89,7 +81,8 @@ function mergeSheets(config, targetSheet) {
       if (id) {
         targetDataMap.set(id.toString(), {
           rowIndex: i,
-          data: targetData[i]
+          data: targetData[i],
+          baseData: baseData[i] // 包含原值信息的注释
         });
       }
     }
@@ -97,6 +90,7 @@ function mergeSheets(config, targetSheet) {
     // 记录需要处理的变更
     var changes = {
       newRows: [],
+      updates: [], // 新增：记录可以直接更新的行
       conflicts: []
     };
 
@@ -114,9 +108,10 @@ function mergeSheets(config, targetSheet) {
         // 新行，直接添加到新行列表
         changes.newRows.push(sourceRow);
       } else {
-        // 检查是否有冲突
+        // 检查修改情况
         var hasConflict = false;
         var conflictColumns = [];
+        var updateColumns = [];
         
         for (var header in headerMap) {
           var sourceIndex = headerMap[header].sourceIndex;
@@ -124,13 +119,31 @@ function mergeSheets(config, targetSheet) {
           
           if (targetIndex === -1) continue; // 跳过目标表中不存在的列
           
-          if (sourceRow[sourceIndex] !== targetRow.data[targetIndex]) {
-            hasConflict = true;
-            conflictColumns.push({
-              header: header,
-              sourceValue: sourceRow[sourceIndex],
-              targetValue: targetRow.data[targetIndex]
-            });
+          var currentValue = targetRow.data[targetIndex];
+          var sourceValue = sourceRow[sourceIndex];
+          
+          // 从注释中获取原值
+          var note = targetRow.baseData[targetIndex];
+          var baseValue = note ? extractBaseValue(note) : currentValue;
+          
+          if (currentValue !== sourceValue) {
+            if (currentValue === baseValue) {
+              // 目标值未被修改，可以直接使用源表的修改
+              updateColumns.push({
+                header: header,
+                sourceValue: sourceValue,
+                baseValue: baseValue
+              });
+            } else if (sourceValue !== baseValue) {
+              // 源表和目标表都做了修改，且修改不一致
+              hasConflict = true;
+              conflictColumns.push({
+                header: header,
+                sourceValue: sourceValue,
+                targetValue: currentValue,
+                baseValue: baseValue
+              });
+            }
           }
         }
         
@@ -141,6 +154,13 @@ function mergeSheets(config, targetSheet) {
             targetRowIndex: targetRow.rowIndex,
             columns: conflictColumns
           });
+        } else if (updateColumns.length > 0) {
+          changes.updates.push({
+            id: id,
+            sourceRowIndex: i,
+            targetRowIndex: targetRow.rowIndex,
+            columns: updateColumns
+          });
         }
       }
     }
@@ -149,28 +169,41 @@ function mergeSheets(config, targetSheet) {
     // 1. 添加新行
     if (changes.newRows.length > 0) {
       var lastRow = targetSheet.getLastRow();
-      targetSheet.getRange(lastRow + 1, 1, changes.newRows.length, sourceHeaders.length)
-        .setValues(changes.newRows)
-        .setBackground(MERGE_CONSTANTS.COLORS.NEW);
+      var newRowsRange = targetSheet.getRange(lastRow + 1, 1, changes.newRows.length, sourceHeaders.length);
+      newRowsRange.setValues(changes.newRows);
+      newRowsRange.setBackground(MERGE_CONSTANTS.COLORS.NEW);
+      
+      // 为新行添加原值注释
+      var newRowsNotes = changes.newRows.map(row => 
+        row.map(value => addBaseValue(value))
+      );
+      newRowsRange.setNotes(newRowsNotes);
     }
 
-    // 2. 标记冲突
+    // 2. 处理可以直接更新的行
+    changes.updates.forEach(update => {
+      update.columns.forEach(col => {
+        var targetIndex = headerMap[col.header].targetIndex;
+        var range = targetSheet.getRange(update.targetRowIndex + 1, targetIndex + 1);
+        range.setValue(col.sourceValue);
+        range.setBackground(MERGE_CONSTANTS.COLORS.UPDATED);
+        range.setNote(addBaseValue(col.sourceValue));
+      });
+    });
+
+    // 3. 标记冲突
     changes.conflicts.forEach(conflict => {
-      var range = targetSheet.getRange(conflict.targetRowIndex + 1, 1, 1, targetHeaders.length);
-      range.setBackground(MERGE_CONSTANTS.COLORS.CONFLICT);
-      
-      // 添加冲突信息到注释
-      var notes = new Array(targetHeaders.length).fill('');
       conflict.columns.forEach(col => {
         var targetIndex = headerMap[col.header].targetIndex;
-        notes[targetIndex] = `${MERGE_CONSTANTS.CONFLICT_PREFIX}当前值: ${col.targetValue}\n源表值: ${col.sourceValue}`;
+        var range = targetSheet.getRange(conflict.targetRowIndex + 1, targetIndex + 1);
+        range.setBackground(MERGE_CONSTANTS.COLORS.CONFLICT);
+        range.setNote(`${MERGE_CONSTANTS.CONFLICT_PREFIX}当前值: ${col.targetValue}\n源表值: ${col.sourceValue}\n原值: ${col.baseValue}`);
       });
-      range.setNotes([notes]);
     });
 
     return {
       success: true,
-      message: `合并完成\n新增行数: ${changes.newRows.length}\n冲突行数: ${changes.conflicts.length}`,
+      message: `合并完成\n新增行数: ${changes.newRows.length}\n更新行数: ${changes.updates.length}\n冲突行数: ${changes.conflicts.length}`,
       changes: changes
     };
   } catch (error) {
@@ -179,6 +212,24 @@ function mergeSheets(config, targetSheet) {
       message: "合并过程中出错: " + error.toString()
     };
   }
+}
+
+// 从注释中提取原值
+function extractBaseValue(note) {
+  if (!note) return null;
+  const basePrefix = "原值: ";
+  const lines = note.split('\n');
+  for (const line of lines) {
+    if (line.startsWith(basePrefix)) {
+      return line.substring(basePrefix.length);
+    }
+  }
+  return null;
+}
+
+// 添加原值到注释
+function addBaseValue(value) {
+  return `原值: ${value}`;
 }
 
 /**
@@ -242,6 +293,12 @@ function confirmMergeFromPreview(sourceSheetName, targetSheetName, previewSheetN
                 .setBackground('#e8f5e9')  // 浅绿色背景
                 .setFontColor('#2e7d32');  // 深绿色文字
     }
+    
+    // 在源表格名称后添加"(已合并)"标记
+    const newSourceSheetName = sourceSheetName.endsWith('(已合并)') 
+      ? sourceSheetName 
+      : `${sourceSheetName}(已合并)`;
+    sourceSheet.setName(newSourceSheetName);
     
     // 4. 删除预览表
     ss.deleteSheet(previewSheet);
@@ -405,32 +462,6 @@ function deletePreviewSheet(previewSheetName) {
   } catch (error) {
     console.error('删除预览表格失败:', error);
     return false;
-  }
-}
-
-/**
- * 获取当前文档中所有表格的信息
- * @returns {Object} 包含所有表格名称和当前表格的对象
- */
-function getSheetInfo() {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheets = ss.getSheets();
-    var currentSheet = ss.getActiveSheet();
-    var sheetNames = sheets.map(function(sheet) {
-      return sheet.getName();
-    });
-
-    return {
-      success: true,
-      sheets: sheetNames,
-      currentSheet: currentSheet.getName()
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: "获取表格信息失败: " + error.toString()
-    };
   }
 }
 

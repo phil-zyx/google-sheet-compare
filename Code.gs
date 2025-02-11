@@ -35,3 +35,43 @@ function base64Decode(input, OPT_webSafe, OPT_plainText) {
   
   return decoder(input, charSet);
 }
+
+/**
+ * 获取所有表格名称
+ * @returns {string[]} 所有表格名称
+ */
+function getSheetNames() {
+  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  return sheets.map(function(sheet) {
+    return sheet.getName();
+  });
+}
+
+/**
+ * 获取当前文档中所有表格的信息（带缓存）
+ * @returns {Object} 包含所有表格名称和当前表格的对象
+ */
+function getSheetInfo() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'sheet_info';
+    const cached = cache.get(cacheKey);
+    
+    if (cached != null) {
+      return JSON.parse(cached);
+    }
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const activeSheet = ss.getActiveSheet();
+    const result = {
+      sheets: ss.getSheets().map(sheet => sheet.getName()),
+      activeSheet: activeSheet.getName()
+    };
+    
+    cache.put(cacheKey, JSON.stringify(result), 600);
+    return result;
+    
+  } catch (error) {
+    throw new Error("获取表格信息失败: " + error.toString());
+  }
+}
