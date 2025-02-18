@@ -75,3 +75,11 @@ function getSheetInfo() {
     throw new Error("获取表格信息失败: " + error.toString());
   }
 }
+
+/**
+ * 获取当前页签名称
+ * @returns {string} 当前页签名称
+ */
+function getCurrentSheetName() {
+  return SpreadsheetApp.getActiveSheet().getName();
+}

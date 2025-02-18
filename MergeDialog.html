@@ -611,27 +611,47 @@
         elements.postPreviewButtons = document.querySelector('.button-group.post-preview');
         console.log('初始化DOM元素完成:', elements);
 
-        // 检查是否有预览状态
+        // 获取当前页签名称，解析源表和目标表
         google.script.run
-          .withSuccessHandler(function (previewState) {
-            console.log('获取到预览状态:', previewState);
-            if (previewState && previewState.success) {
-              // 保存到本地状态
-              state.previewData = previewState;
-              console.log('保存预览状态到本地:', state.previewData);
-              // 直接显示确认界面
-              showConfirmView();
+          .withSuccessHandler(function (sheetName) {
+            console.log('当前页签名称:', sheetName);
+            const match = sheetName.match(/^(.*?)\s*->\s*(.*?)\s*合并预览$/);
+
+            if (match) {
+              const [_, sourceSheet, targetSheet] = match;
+              console.log('解析出的源表和目标表:', { sourceSheet, targetSheet });
+
+              // 检查预览状态
+              google.script.run
+                .withSuccessHandler(function (previewState) {
+                  console.log('获取到预览状态:', previewState);
+                  if (previewState && previewState.success) {
+                    // 保存到本地状态
+                    state.previewData = previewState;
+                    console.log('保存预览状态到本地:', state.previewData);
+                    // 直接显示确认界面
+                    showConfirmView();
+                  } else {
+                    console.log('没有预览状态，加载初始界面');
+                    // 否则加载初始界面
+                    loadSheetInfo();
+                  }
+                })
+                .withFailureHandler(function (error) {
+                  console.error('获取预览状态失败:', error);
+                  loadSheetInfo();
+                })
+                .getPreviewState(sourceSheet.trim(), targetSheet.trim());
             } else {
-              console.log('没有预览状态，加载初始界面');
-              // 否则加载初始界面
+              console.log('不是预览页签，加载初始界面');
               loadSheetInfo();
             }
           })
           .withFailureHandler(function (error) {
-            console.error('初始化失败:', error);
+            console.error('获取页签名称失败:', error);
             loadSheetInfo();
           })
-          .getPreviewState();
+          .getCurrentSheetName();  // 需要在 Merge.gs 中添加这个函数
       }
 
       // 初始化

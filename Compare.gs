@@ -453,6 +453,25 @@ function createNewSheetTab() {
       ss.moveActiveSheet(currentIndex + 2);
       console.log('移动页签完成');
       
+      // 创建用户友好的创建信息
+      var creationInfo = {
+        '创建者': Session.getActiveUser().getEmail(),
+        '创建时间': new Date().toLocaleString(),
+        '来源页签': currentSheet.getName()
+      };
+      
+      var a1Cell = newSheet.getRange("A1");
+      var currentNote = a1Cell.getNote() || '';
+      var newNote = NoteManager.addSystemNote(
+        currentNote,
+        NOTE_CONSTANTS.TYPES.SHEET_CREATION,
+        Object.entries(creationInfo)
+          .map(([key, value]) => `${key}：${value}`)
+          .join('\n')
+      );
+      a1Cell.setNote(newNote);
+      console.log('添加创建记录到A1单元格');
+      
       // 清除缓存以确保getSheetInfo()返回最新数据
       var cache = CacheService.getScriptCache();
       cache.remove('sheet_info');
