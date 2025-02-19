@@ -1,8 +1,8 @@
 // 表格相关常量
 const SHEET_CONSTANTS = {
   COLORS: {
-    MODIFIED: "#ffcdd2",  // 修改 - 浅红色
-    ADDED: "#c8e6c9",    // 新增 - 浅绿色
+    MODIFIED: "#b3e5fc",  // 修改 - 浅蓝色
+    ADDED: "#dcedc8",    // 新增 - 淡绿色
     REMOVED: "#ffdce0",  // 删除 - Git风格浅红色
     HEADER_MODIFIED: "#fff9c4",  // 表头修改 - 浅黄色
     CONFLICT: "#f8bbd0"  // 冲突 - 粉色
@@ -27,7 +27,7 @@ const MERGE_CONSTANTS = {
   PREVIEW_SUFFIX: '_预览',
   COLORS: {
     NEW: '#b7e1cd',      // 浅绿色 - 新行
-    CONFLICT: '#fce8b2', // 浅黄色 - 冲突
+    CONFLICT: '#ffdce0', // 浅红色 - 冲突
     UPDATED: '#c9daf8',  // 浅蓝色 - 已更新
     RESOLVED: "#e8f5e9"  // 已解决 - 更浅的绿色
   },
@@ -145,7 +145,7 @@ class NoteManager {
     if (Object.keys(systemNotes).length === 0) return '';
     
     const formattedNotes = Object.entries(systemNotes)
-      .map(([key, value]) => `${key}${NOTE_CONSTANTS.KEY_VALUE_SEPARATOR}${value}`)
+      .map(([key, value]) => `${key}${NOTE_CONSTANTS.KEY_VALUE_SEPARATOR}\n${value}`)
       .join(NOTE_CONSTANTS.LINE_SEPARATOR);
     
     return `${NOTE_CONSTANTS.SYSTEM_NOTE_START}${formattedNotes}${NOTE_CONSTANTS.SYSTEM_NOTE_END}`;

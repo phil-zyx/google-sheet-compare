@@ -326,6 +326,7 @@
 
       // 加载表格信息
       function loadSheetInfo() {
+        toggleLoading(true, '加载表格信息...');
         state.isLoading = true;
         google.script.run
           .withSuccessHandler(function (result) {
@@ -334,10 +335,12 @@
             loadSheets(result.sheets, result.activeSheet);
             showContent();
             state.isLoading = false;
+            toggleLoading(false);
           })
           .withFailureHandler(function (error) {
             handleMergeError(error);
             state.isLoading = false;
+            toggleLoading(false);
           })
           .getSheetInfo();
       }
@@ -410,11 +413,18 @@
         }
 
         showStatus('正在生成预览...', false);
+        toggleLoading(true, '正在生成预览...');
         document.querySelectorAll('button').forEach(btn => btn.disabled = true);
 
         google.script.run
-          .withSuccessHandler(handlePreviewSuccess)
-          .withFailureHandler(handleMergeError)
+          .withSuccessHandler(function (result) {
+            toggleLoading(false);
+            handlePreviewSuccess(result);
+          })
+          .withFailureHandler(function (error) {
+            toggleLoading(false);
+            handleMergeError(error);
+          })
           .previewMerge({
             sourceSheet: sourceSheet,
             targetSheet: targetSheet
@@ -600,6 +610,7 @@
       // 初始化对话框
       function initializeDialog() {
         console.log('开始初始化对话框');
+        toggleLoading(true, '初始化对话框...');
         // 缓存DOM元素
         elements.sourceSheet = document.getElementById('sourceSheet');
         elements.targetSheet = document.getElementById('targetSheet');
@@ -626,32 +637,33 @@
                 .withSuccessHandler(function (previewState) {
                   console.log('获取到预览状态:', previewState);
                   if (previewState && previewState.success) {
-                    // 保存到本地状态
                     state.previewData = previewState;
                     console.log('保存预览状态到本地:', state.previewData);
-                    // 直接显示确认界面
                     showConfirmView();
                   } else {
                     console.log('没有预览状态，加载初始界面');
-                    // 否则加载初始界面
                     loadSheetInfo();
                   }
+                  toggleLoading(false);
                 })
                 .withFailureHandler(function (error) {
                   console.error('获取预览状态失败:', error);
                   loadSheetInfo();
+                  toggleLoading(false);
                 })
                 .getPreviewState(sourceSheet.trim(), targetSheet.trim());
             } else {
               console.log('不是预览页签，加载初始界面');
               loadSheetInfo();
+              toggleLoading(false);
             }
           })
           .withFailureHandler(function (error) {
             console.error('获取页签名称失败:', error);
             loadSheetInfo();
+            toggleLoading(false);
           })
-          .getCurrentSheetName();  // 需要在 Merge.gs 中添加这个函数
+          .getCurrentSheetName();
       }
 
       // 初始化

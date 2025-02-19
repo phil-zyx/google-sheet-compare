@@ -73,6 +73,41 @@ function mergeSheets(config, targetSheet) {
       headerMap[header] = {sourceIndex: index, targetIndex: -1};
     });
     
+    // 检查新增列
+    var newColumns = [];
+    sourceHeaders.forEach((header, index) => {
+      if (!targetHeaders.includes(header) && !header.toString().endsWith(MERGE_CONSTANTS.ID_SUFFIX)) {
+        newColumns.push({
+          header: header,
+          sourceIndex: index
+        });
+      }
+    });
+
+    // 如果有新增列，在目标表和预览表中添加这些列
+    if (newColumns.length > 0) {
+      // 在目标表最后添加新列
+      targetHeaders = targetHeaders.concat(newColumns.map(col => col.header));
+      targetSheet.getRange(1, targetHeaders.length - newColumns.length + 1, 1, newColumns.length)
+        .setValues([newColumns.map(col => col.header)])
+        .setBackground(MERGE_CONSTANTS.COLORS.NEW);
+      
+      // 更新headerMap
+      newColumns.forEach((col, idx) => {
+        headerMap[col.header].targetIndex = targetHeaders.length - newColumns.length + idx;
+      });
+      
+      // 为新列添加空值
+      var emptyColumns = Array(newColumns.length).fill('');
+      for (var i = 1; i < targetData.length; i++) {
+        targetSheet.getRange(i + 1, targetHeaders.length - newColumns.length + 1, 1, newColumns.length)
+          .setValues([emptyColumns]);
+      }
+      
+      // 更新targetData以包含新列
+      targetData = targetSheet.getDataRange().getValues();
+    }
+
     targetHeaders.forEach((header, index) => {
       if (headerMap[header]) {
         headerMap[header].targetIndex = index;
@@ -211,8 +246,7 @@ function mergeSheets(config, targetSheet) {
         var range = targetSheet.getRange(conflict.targetRowIndex + 1, targetIndex + 1);
         range.setBackground(MERGE_CONSTANTS.COLORS.CONFLICT);
         
-        // 添加冲突信息注释
-        const conflictInfo = `当前值: ${col.targetValue}\n源表值: ${col.sourceValue}\n基值: ${col.baseValue}`;
+        const conflictInfo = `${config.targetSheet}: ${col.targetValue}\n${config.sourceSheet}: ${col.sourceValue}`;
         const currentNote = range.getNote();
         const newNote = NoteManager.addSystemNote(
           NoteManager.removeSystemNote(currentNote, NOTE_CONSTANTS.TYPES.CONFLICT),
@@ -310,6 +344,9 @@ function confirmMergeFromPreview(sourceSheetName, targetSheetName, previewSheetN
     // 5. 清除预览状态
     const cache = CacheService.getScriptCache();
     cache.remove('merge_preview_state');
+    
+    // 6. 激活目标页签
+    targetSheet.activate();
     
     return {
       success: true,
@@ -452,6 +489,16 @@ function previewMerge(config) {
   }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 检查是否已存在预览状态
+  const existingPreview = getPreviewState(config.sourceSheet, config.targetSheet);
+  if (existingPreview) {
+    return {
+      success: false,
+      message: `已存在 "${config.sourceSheet} -> ${config.targetSheet}" 的预览，请先完成或取消现有预览`
+    };
+  }
+
   var sourceSheet = ss.getSheetByName(config.sourceSheet);
   var targetSheet = ss.getSheetByName(config.targetSheet);
   

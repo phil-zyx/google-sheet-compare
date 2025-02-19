@@ -16,19 +16,28 @@ function showCompareDialog() {
   
   var html = HtmlService.createHtmlOutputFromFile('CompareDialog')
     .setWidth(400)
-    .setHeight(300);
+    .setHeight(500);
   SpreadsheetApp.getUi().showModalDialog(html, '表格比较配置');
 }
 
 // 执行比较操作 - 优化数据处理
 function compareSheets(config) {
-  // 应该添加输入验证
   if (!config || !config.sheet1 || !config.sheet2) {
     return {
       success: false,
       message: "配置参数无效"
     };
   }
+
+  // 检查当前表格是否为对比结果表
+  var currentSheet = SpreadsheetApp.getActiveSheet();
+  if (currentSheet.getName().includes(" vs ") && currentSheet.getName().endsWith("比较结果")) {
+    return {
+      success: false,
+      message: "对比结果表不能作为对比的源表格，请切换到其他表格后再试"
+    };
+  }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet1 = ss.getSheetByName(config.sheet1);
   var sheet2 = ss.getSheetByName(config.sheet2);
@@ -41,23 +50,22 @@ function compareSheets(config) {
   }
 
   try {
+    // 创建比较表格
+    var previewName = `${config.sheet1} vs ${config.sheet2} 比较结果`;
+    var previewSheet = createCompareSheet(previewName);
+
     // 批量获取数据以减少API调用
     var range1 = sheet1.getDataRange();
     var range2 = sheet2.getDataRange();
     
-    var [data1, backgrounds1, notes1] = [
-      range1.getValues(),
-      range1.getBackgrounds(),
-      range1.getNotes()
-    ];
-    
+    var data1 = range1.getValues();
     var data2 = range2.getValues();
     
     // 获取表头数据
-    var headers1 = sheet1.getRange(1, 1, 1, range1.getNumColumns()).getValues()[0];
-    var headers2 = sheet2.getRange(1, 1, 1, range2.getNumColumns()).getValues()[0];
+    var headers1 = data1[0];
+    var headers2 = data2[0];
     
-    // 使用对象来存储表头映射，提高查找效率
+    // 使用对象来存储表头映射
     var headerMap = {};
     var unmatchedHeaders1 = [];
     var unmatchedHeaders2 = [];
@@ -83,205 +91,172 @@ function compareSheets(config) {
       }
     });
 
-    // 如果有表头差异，显示详细信息
-    if (unmatchedHeaders1.length > 0 || unmatchedHeaders2.length > 0) {
-      var warningMessage = "检测到表头差异：\n";
-      if (unmatchedHeaders1.length > 0) {
-        warningMessage += "\n当前表格独有的列：\n" + 
-          unmatchedHeaders1.map(h => `- ${h.header}`).join("\n");
-      }
-      if (unmatchedHeaders2.length > 0) {
-        warningMessage += "\n对比表格独有的列：\n" + 
-          unmatchedHeaders2.map(h => `- ${h.header}`).join("\n");
-      }
-      warningMessage += "\n\n系统将只比较两个表格中都存在的列，是否继续？";
-      
-      var ui = SpreadsheetApp.getUi();
-      var response = ui.alert('表头差异提醒', warningMessage, ui.ButtonSet.YES_NO);
-      
-      if (response !== ui.Button.YES) {
-        return {
-          success: false,
-          message: "操作已取消"
-        };
-      }
-    }
-
-    // 检查是否存在之前的比较标记
-    var backgrounds = backgrounds1;
-    var notes = notes1;
-    var hasExistingMarks = false;
-
-    // 检查是否存在比较标记
-    for (var i = 0; i < backgrounds.length && !hasExistingMarks; i++) {
-      for (var j = 0; j < backgrounds[i].length && !hasExistingMarks; j++) {
-        if (backgrounds[i][j] === COMPARE_CONSTANTS.COLORS.MODIFIED || backgrounds[i][j] === COMPARE_CONSTANTS.COLORS.ADDED ||
-            (notes[i][j] && (notes[i][j].includes("当前值:") || 
-             notes[i][j].includes("对比值:") || 
-             notes[i][j].includes("在对比表中未找到对应数据") ||
-             notes[i][j].includes("最近比较时间:")))) {
-          hasExistingMarks = true;
-        }
-      }
-    }
-
-    // 如果存在标记，提示用户
-    if (hasExistingMarks) {
-      var ui = SpreadsheetApp.getUi();
-      var response = ui.alert(
-        '发现已有比较标记',
-        '当前表格中存在之前的比较标记，是否清除后继续？',
-        ui.ButtonSet.YES_NO
-      );
-
-      if (response !== ui.Button.YES) {
-        return {
-          success: false,
-          message: "操作已取消"
-        };
-      }
-
-      // 清除现有标记
-      clearAllHighlights(false); // 传入 false 表示不显示确认对话框
-    }
-
-    // 获取当前背景色
-    var currentBackgrounds = sheet1.getDataRange().getBackgrounds();
+    // 找到ID列（使用常量定义的后缀）
+    var idCol1 = headers1.findIndex(header => 
+      header.toString().endsWith(ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX));
+    var idCol2 = headers2.findIndex(header => 
+      header.toString().endsWith(ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX));
     
+    if (idCol1 === -1 || idCol2 === -1) {
+      return {
+        success: false,
+        message: `未找到ID列（以'${ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX}'结尾的列）`
+      };
+    }
+
+    // 准备预览表数据
+    var previewData = [headers1];
+    var previewColors = [new Array(headers1.length).fill(null)];
+    var previewNotes = [new Array(headers1.length).fill('')];
+
+    // 使用Map存储表2的数据，以ID为键
+    var data2Map = new Map();
+    for (var i = 1; i < data2.length; i++) {
+      var id = data2[i][idCol2].toString();
+      if (!data2Map.has(id)) {
+        data2Map.set(id, []);
+      }
+      data2Map.get(id).push({
+        rowIndex: i,
+        data: data2[i]
+      });
+    }
+
     var differences = {
       total: 0,
       modified: 0,
-      missing: 0,
       added: 0,
-      removed: 0,  // 新增：记录删除的行数
+      removed: 0,
+      duplicate: 0,
       headerDiff: unmatchedHeaders1.length + unmatchedHeaders2.length
     };
 
-    // 准备批量更新数组
-    var backgroundColors = [];
-    var notes = [];
-    var rows = data1.length;
-    var cols = headers1.length;
+    // 处理表1的数据行
+    var processedIds = new Set();
+    for (var i = 1; i < data1.length; i++) {
+      var id = data1[i][idCol1].toString();
+      var hasChanges = false;
+      var rowColors = new Array(headers1.length).fill(null);
+      var rowNotes = new Array(headers1.length).fill('');
+      var rowData = [...data1[i]];
 
-    // 处理表头行
-    var headerBackgrounds = [];
-    var headerNotes = [];
-    for (var j = 0; j < cols; j++) {
-      if (headerMap[headers1[j]].sheet2Index === -1) {
-        headerBackgrounds.push(COMPARE_CONSTANTS.COLORS.HEADER_MODIFIED);
-        headerNotes.push("此列在对比表格中不存在");
+      var matchingRows = data2Map.get(id) || [];
+      processedIds.add(id);
+
+      if (matchingRows.length === 0) {
+        // ID在表2中不存在，标记为新增行
+        rowColors.fill(COMPARE_CONSTANTS.COLORS.ADDED);
+        // 移除注释，只使用颜色标记
+        hasChanges = true;
+        differences.added++;
+      } else if (matchingRows.length > 1) {
+        // ID在表2中有重复
+        rowColors.fill(COMPARE_CONSTANTS.COLORS.MODIFIED);
+        rowNotes = rowNotes.map(note => 
+          NoteManager.addSystemNote(note, NOTE_CONSTANTS.TYPES.VERSION, 
+            `在对比表格中发现 ${matchingRows.length} 条重复记录`)
+        );
+        hasChanges = true;
+        differences.duplicate++;
       } else {
-        headerBackgrounds.push(currentBackgrounds[0][j]);
-        headerNotes.push(null);
-      }
-    }
-    backgroundColors.push(headerBackgrounds);
-    notes.push(headerNotes);
-
-    // 记录已处理的行（用于后续检查删除的行）
-    var processedRows = new Set();
-
-    // 处理数据行
-    for(var i = 1; i < rows; i++) {
-      var backgroundRow = [];
-      var noteRow = [];
-      
-      // 记录这一行的内容用于后续比较
-      var rowContent = '';
-      for(var j = 0; j < cols; j++) {
-        var sheet2Col = headerMap[headers1[j]].sheet2Index;
-        if (sheet2Col !== -1) {
-          rowContent += data1[i][j] + '|';
-        }
-      }
-      processedRows.add(rowContent);
-
-      for(var j = 0; j < cols; j++) {
-        var header = headers1[j];
-        var sheet2Col = headerMap[header].sheet2Index;
-        
-        if (sheet2Col === -1) {
-          // 此列在表格2中不存在
-          backgroundRow.push(COMPARE_CONSTANTS.COLORS.ADDED);
-          noteRow.push("此列在对比表格中不存在");
-          differences.added++;
-          differences.total++;
-        } else if (i < data2.length) {
-          if (data1[i][j] !== data2[i][sheet2Col]) {
-            backgroundRow.push(COMPARE_CONSTANTS.COLORS.MODIFIED);
-            noteRow.push("当前值: " + data1[i][j] + "\n对比值: " + data2[i][sheet2Col]);
-            differences.modified++;
-            differences.total++;
+        // 比较每个单元格
+        for (var j = 0; j < headers1.length; j++) {
+          var sheet2Col = headerMap[headers1[j]].sheet2Index;
+          if (sheet2Col === -1) {
+            rowColors[j] = COMPARE_CONSTANTS.COLORS.ADDED;
+            rowNotes[j] = NoteManager.addSystemNote('', NOTE_CONSTANTS.TYPES.VERSION, 
+              "此列在对比表格中不存在");
+            hasChanges = true;
+            differences.added++;
           } else {
-            backgroundRow.push(currentBackgrounds[i][j]);
-            noteRow.push(null);
+            var value2 = matchingRows[0].data[sheet2Col];
+            if (data1[i][j] !== value2) {
+              rowColors[j] = COMPARE_CONSTANTS.COLORS.MODIFIED;
+              rowNotes[j] = NoteManager.addSystemNote('', NOTE_CONSTANTS.TYPES.VERSION,
+                `当前表格: ${data1[i][j]}\n对比表格: ${value2}`);
+              hasChanges = true;
+              differences.modified++;
+            }
           }
-        } else {
-          backgroundRow.push(COMPARE_CONSTANTS.COLORS.ADDED);
-          noteRow.push("在对比表格中未找到对应数据");
-          differences.added++;
-          differences.total++;
         }
       }
-      backgroundColors.push(backgroundRow);
-      notes.push(noteRow);
+
+      if (hasChanges) {
+        previewData.push(rowData);
+        previewColors.push(rowColors);
+        previewNotes.push(rowNotes);
+        differences.total++;
+      }
     }
 
-    // 检查B表中存在而A表中不存在的行
-    for(var i = 1; i < data2.length; i++) {
-      var rowContent = '';
-      for(var j = 0; j < data2[i].length; j++) {
-        rowContent += data2[i][j] + '|';
-      }
-      
-      if (!processedRows.has(rowContent)) {
+    // 检查表2中存在而表1中不存在的ID
+    for (let [id, rows] of data2Map) {
+      if (!processedIds.has(id)) {
+        // 对于每个未处理的ID，添加一行到预览表
+        var rowData = new Array(headers1.length).fill('');
+        var rowColors = new Array(headers1.length).fill(COMPARE_CONSTANTS.COLORS.REMOVED);
+        var rowNotes = new Array(headers1.length).fill('').map(note => 
+          NoteManager.addSystemNote(note, NOTE_CONSTANTS.TYPES.VERSION, '此ID在基准表中不存在')
+        );
+
+        // 填充能对应的数据
+        headers1.forEach((header, index) => {
+          var sheet2Col = headerMap[header].sheet2Index;
+          if (sheet2Col !== -1) {
+            rowData[index] = rows[0].data[sheet2Col];
+          }
+        });
+
+        if (rows.length > 1) {
+          rowNotes = rowNotes.map(note => 
+            NoteManager.addSystemNote(
+              NoteManager.removeSystemNote(note, NOTE_CONSTANTS.TYPES.VERSION),
+              NOTE_CONSTANTS.TYPES.VERSION,
+              `此ID在基准表中不存在\n(在对比表格中有 ${rows.length} 条重复记录)`
+            )
+          );
+        }
+
+        previewData.push(rowData);
+        previewColors.push(rowColors);
+        previewNotes.push(rowNotes);
         differences.removed++;
         differences.total++;
-        
-        // 将删除的行添加到结果中
-        var removedRow = [];
-        var removedNote = [];
-        var dataRow = new Array(cols).fill('');
-        
-        for(var j = 0; j < cols; j++) {
-          removedRow.push(COMPARE_CONSTANTS.COLORS.REMOVED);  // 使用删除专用的颜色
-          var sheet2Col = headerMap[headers1[j]].sheet2Index;
-          if (sheet2Col !== -1) {
-            var value = data2[i][sheet2Col];
-            dataRow[j] = value;
-            removedNote.push("此行在基准表中不存在\n对比表中的值: " + value);
-          } else {
-            removedNote.push("此行在基准表中不存在");
-          }
-        }
-        
-        backgroundColors.push(removedRow);
-        notes.push(removedNote);
-        data1.push(dataRow);
-        rows++;
       }
     }
 
-    // 批量更新以减少API调用
-    var updateRange = sheet1.getRange(1, 1, rows, cols);
-    updateRange.setBackgrounds(backgroundColors);
-    updateRange.setNotes(notes);
-    updateRange.setValues(data1);  // 更新包括新添加的行
+    // 更新预览表
+    var previewRange = previewSheet.getRange(1, 1, previewData.length, headers1.length);
+    previewRange.setValues(previewData);
+    previewRange.setBackgrounds(previewColors);
+    previewRange.setNotes(previewNotes);
 
-    // 更新比较信息
-    var infoNote = "最近比较时间: " + new Date().toLocaleString() + "\n" +
-                   "对比表格: " + config.sheet2 + "\n" +
-                   "差异总数: " + differences.total + "\n" +
-                   "└─ 值不同: " + differences.modified + "\n" +
-                   "└─ 新增项: " + differences.added + "\n" +
-                   "└─ 删除项: " + differences.removed + "\n" +
-                   "└─ 表头差异: " + differences.headerDiff;
+    // 添加比较信息到A1单元格
+    var compareInfo = `对比表格: ${config.sheet2}\n` +
+                     `差异总数: ${differences.total}\n` +
+                     `└─ 值不同: ${differences.modified}\n` +
+                     `└─ 新增项: ${differences.added}\n` +
+                     `└─ 删除项: ${differences.removed}\n` +
+                     `└─ 重复ID: ${differences.duplicate}\n` +
+                     `└─ 表头差异: ${differences.headerDiff}\n` +
+                     `比较时间: ${new Date().toLocaleString()}`;
     
-    sheet1.getRange(1, 1).setNote(infoNote);
+    // 使用 NoteManager 添加系统注释
+    var a1Cell = previewSheet.getRange(1, 1);
+    var currentNote = a1Cell.getNote();
+    var newNote = NoteManager.addSystemNote(
+      currentNote,
+      NOTE_CONSTANTS.TYPES.VERSION,
+      compareInfo
+    );
+    a1Cell.setNote(newNote);
+
+    // 激活预览表
+    previewSheet.activate();
 
     return {
       success: true,
-      message: `比较完成！\n发现 ${differences.total} 处差异\n${differences.modified} 处值不同\n${differences.added} 处新增\n${differences.removed} 处删除\n${differences.headerDiff} 处表头差异`,
+      message: `比较完成！\n发现 ${differences.total} 处差异\n${differences.modified} 处值不同\n${differences.added} 处新增\n${differences.removed} 处删除\n${differences.duplicate} 处重复ID\n${differences.headerDiff} 处表头差异`,
       differences: differences
     };
   } catch (error) {
@@ -290,6 +265,22 @@ function compareSheets(config) {
       message: "发生错误: " + error.toString()
     };
   }
+}
+
+/**
+ * 创建比较表格
+ * @param {string} previewName 预览表格名称
+ * @returns {Sheet} 比较表格
+ */
+function createCompareSheet(previewName) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existingSheet = ss.getSheetByName(previewName);
+  
+  if (existingSheet) {
+    ss.deleteSheet(existingSheet);
+  }
+  
+  return ss.insertSheet(previewName);
 }
 
 // 清除所有高亮和注释
@@ -368,16 +359,12 @@ function clearAllHighlights(showConfirm = true) {
         }
         
         // 清除所有比较相关的注释
-        if (currentNote && (
-            currentNote.includes("当前值:") || 
-            currentNote.includes("对比值:") || 
-            currentNote.includes("在对比表格中未找到对应数据") ||
-            currentNote.includes("最近比较时间:") ||
-            currentNote.includes("此列在对比表格中不存在") ||
-            currentNote.includes("此行在基准表中不存在"))) {
-          noteRow.push("");
+        if (currentNote) {
+          // 移除版本信息注释
+          currentNote = NoteManager.removeSystemNote(currentNote, NOTE_CONSTANTS.TYPES.VERSION);
+          noteRow.push(currentNote || '');
         } else {
-          noteRow.push(currentNote);
+          noteRow.push('');
         }
       }
       
@@ -452,6 +439,8 @@ function createNewSheetTab() {
       console.log('切换到新页签:', newSheet.getName());
       ss.moveActiveSheet(currentIndex + 2);
       console.log('移动页签完成');
+      // 清除所有标记和系统注释
+      clearAllMarks(false);  // 传入 false 以跳过确认对话框
       
       // 创建用户友好的创建信息
       var creationInfo = {
