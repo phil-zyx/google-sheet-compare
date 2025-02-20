@@ -83,3 +83,18 @@ function getSheetInfo() {
 function getCurrentSheetName() {
   return SpreadsheetApp.getActiveSheet().getName();
 }
+
+/**
+ * 获取当前页签A1单元格的注释
+ * @returns {string} A1单元格的注释内容
+ */
+function getCurrentSheetA1Note() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSheet();
+    const a1Note = sheet.getRange("A1").getNote();
+    return a1Note || '';
+  } catch (error) {
+    console.error('获取A1单元格注释失败:', error);
+    return '';
+  }
+}

@@ -665,3 +665,26 @@ function createPreviewSheet(targetSheetName, sourceSheetName) {
   }
   return ss.insertSheet(previewName);
 }
+
+/**
+ * 显示合并对话框
+ */
+function showMergeDialog() {
+  // 检查当前表格是否已经标记为已合并
+  var currentSheet = SpreadsheetApp.getActiveSheet();
+  var currentSheetName = currentSheet.getName();
+  
+  if (currentSheetName.endsWith('(已合并)')) {
+    SpreadsheetApp.getUi().alert(
+      '无法合并',
+      '当前表格已经标记为已合并状态，不能重复发起合并。',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    return;
+  }
+
+  var html = HtmlService.createHtmlOutputFromFile('MergeDialog')
+    .setWidth(500)
+    .setHeight(500);
+  SpreadsheetApp.getUi().showModalDialog(html, '表格合并工具');
+}
