@@ -48,3 +48,13 @@
    - Compare.gs
    - CompareDialog.html
 4. 保存后刷新界面
+
+## 代码结构说明
+
+- Code.gs: 一些公共函数
+- Constants.gs: const 定义及 NoteManager
+- Triggers.gs: 触发器
+- IdChecker: Id 重复检查器
+- Compare.gs: 分支对比
+- Merge.gs: 分支合并
+- ESql.gs: 配置表查 sql

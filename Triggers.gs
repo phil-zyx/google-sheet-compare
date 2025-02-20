@@ -26,6 +26,99 @@ function createEditTrigger() {
 }
 
 /**
+ * 打开文档时的触发器
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('配置表工具')
+    .addItem('新建页签', 'createNewSheetTab')
+    .addItem('比较差异', 'showCompareDialog')
+    .addItem('合并表格', 'showMergeDialog')
+    .addItem('清除所有标记', 'clearAllMarks')
+    .addToUi();
+}
+
+/**
+ * 当编辑表格时的触发器
+ * @param {Object} e 编辑事件对象
+ */
+function onEdit(e) {
+  try {
+    // 检查表格是否包含ID列
+    const sheet = e.range.getSheet();
+    const headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const hasIdColumn = headerRow.some(header => 
+      header && header.toString().endsWith(ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX)
+    );
+    
+    // 如果没有ID列，直接返回
+    if (!hasIdColumn) return;
+
+    // 1. 处理基准值记录和颜色标记
+    const range = e.range;
+    const oldValue = e.oldValue;
+    const newValue = range.getValue();
+    
+    // 获取当前单元格的背景色和注释
+    const currentBg = range.getBackground();
+    let note = range.getNote();
+    
+    // 如果当前单元格已经是新增状态（绿色），则不做任何改变
+    if (currentBg === SHEET_CONSTANTS.COLORS.ADDED) {
+      return;
+    }
+
+    // 检查是否已经有修改记录（通过背景色判断）
+    const isAlreadyModified = currentBg === SHEET_CONSTANTS.COLORS.MODIFIED;
+
+    if (oldValue !== undefined) {  // 是修改操作
+      // 设置为修改颜色（浅蓝色）
+      range.setBackground(SHEET_CONSTANTS.COLORS.MODIFIED);
+      
+      // 只在首次修改时记录基准值
+      if (!isAlreadyModified) {
+        // 保持原始值的格式
+        let baseValue = oldValue;
+        // 如果是整数，确保以整数形式存储
+        if (Number.isInteger(Number(oldValue))) {
+          baseValue = parseInt(oldValue, 10);
+        }
+        
+        // 添加基准值到系统注释，保留用户原有注释
+        const newNote = NoteManager.addSystemNote(
+          note,
+          NOTE_CONSTANTS.TYPES.BASE_VALUE,
+          baseValue.toString()
+        );
+        range.setNote(newNote);
+      }
+    } else if (newValue && newValue.toString().trim() !== '') {
+      // 如果是新增值，设置为新增颜色（淡绿色）
+      range.setBackground(SHEET_CONSTANTS.COLORS.ADDED);
+    }
+
+    // 2. 处理ID检查 - 无论是否有oldValue都需要检查
+    const column = range.getColumn();
+    const headerRange = sheet.getRange(1, column);
+    const headerValue = headerRange.getValue();
+    
+    // 检查是否编辑的是 ID 列
+    if (headerValue && headerValue.toString().endsWith(ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX)) {
+      // 设置一个短暂的延迟，确保值已经更新
+      Utilities.sleep(100);
+      // 只检查 ID 列的单元格
+      const idRange = sheet.getRange(range.getRow(), column, range.getNumRows(), 1);
+      checkIdConflicts({
+        sheet: sheet,
+        range: idRange
+      });
+    }
+  } catch (error) {
+    console.error('onEdit触发器出错:', error);
+  }
+}
+
+/**
  * 清除所有标记和系统注释
  * @param {boolean} showConfirm 是否显示确认对话框
  * @returns {Object} 操作结果
@@ -157,98 +250,5 @@ function clearAllMarks(showConfirm = true) {
       success: false,
       message: "清除失败: " + error.toString()
     };
-  }
-}
-
-/**
- * 打开文档时的触发器
- */
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('配置表工具')
-    .addItem('新建页签', 'createNewSheetTab')
-    .addItem('比较差异', 'showCompareDialog')
-    .addItem('合并表格', 'showMergeDialog')
-    .addItem('清除所有标记', 'clearAllMarks')
-    .addToUi();
-}
-
-/**
- * 当编辑表格时的触发器
- * @param {Object} e 编辑事件对象
- */
-function onEdit(e) {
-  try {
-    // 检查表格是否包含ID列
-    const sheet = e.range.getSheet();
-    const headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const hasIdColumn = headerRow.some(header => 
-      header && header.toString().endsWith(ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX)
-    );
-    
-    // 如果没有ID列，直接返回
-    if (!hasIdColumn) return;
-
-    // 1. 处理基准值记录和颜色标记
-    const range = e.range;
-    const oldValue = e.oldValue;
-    const newValue = range.getValue();
-    
-    // 获取当前单元格的背景色和注释
-    const currentBg = range.getBackground();
-    let note = range.getNote();
-    
-    // 如果当前单元格已经是新增状态（绿色），则不做任何改变
-    if (currentBg === SHEET_CONSTANTS.COLORS.ADDED) {
-      return;
-    }
-
-    // 检查是否已经有修改记录（通过背景色判断）
-    const isAlreadyModified = currentBg === SHEET_CONSTANTS.COLORS.MODIFIED;
-
-    if (oldValue !== undefined) {  // 是修改操作
-      // 设置为修改颜色（浅蓝色）
-      range.setBackground(SHEET_CONSTANTS.COLORS.MODIFIED);
-      
-      // 只在首次修改时记录基准值
-      if (!isAlreadyModified) {
-        // 保持原始值的格式
-        let baseValue = oldValue;
-        // 如果是整数，确保以整数形式存储
-        if (Number.isInteger(Number(oldValue))) {
-          baseValue = parseInt(oldValue, 10);
-        }
-        
-        // 添加基准值到系统注释，保留用户原有注释
-        const newNote = NoteManager.addSystemNote(
-          note,
-          NOTE_CONSTANTS.TYPES.BASE_VALUE,
-          baseValue.toString()
-        );
-        range.setNote(newNote);
-      }
-    } else if (newValue && newValue.toString().trim() !== '') {
-      // 如果是新增值，设置为新增颜色（淡绿色）
-      range.setBackground(SHEET_CONSTANTS.COLORS.ADDED);
-    }
-
-    // 2. 处理ID检查 - 无论是否有oldValue都需要检查
-    const column = range.getColumn();
-    const headerRange = sheet.getRange(1, column);
-    const headerValue = headerRange.getValue();
-    
-    // 检查是否编辑的是 ID 列
-    if (headerValue && headerValue.toString().endsWith(ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX)) {
-      // 设置一个短暂的延迟，确保值已经更新
-      Utilities.sleep(100);
-      // 只检查 ID 列的单元格
-      const idRange = sheet.getRange(range.getRow(), column, range.getNumRows(), 1);
-      checkIdConflicts({
-        sheet: sheet,
-        range: idRange
-      });
-    }
-  } catch (error) {
-    console.error('onEdit触发器出错:', error);
   }
 }

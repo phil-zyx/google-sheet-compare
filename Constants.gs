@@ -1,3 +1,5 @@
+// --------------------- 常量 --------------------------------
+
 // 表格相关常量
 const SHEET_CONSTANTS = {
   COLORS: {
@@ -8,16 +10,6 @@ const SHEET_CONSTANTS = {
     CONFLICT: "#f8bbd0"  // 冲突 - 粉色
   },
   CACHE_DURATION: 600
-};
-
-// 版本控制相关常量
-const VERSION_CONSTANTS = {
-  NOTES: {
-    BASE_INFO_PREFIX: "BASE_INFO:",
-    ORIGINAL_VALUE_PREFIX: "ORIGINAL_VALUE:",
-    CHANGE_HISTORY_PREFIX: "HISTORY:"
-  },
-  MAX_HISTORY_ENTRIES: 10
 };
 
 // 合并相关常量
@@ -40,10 +32,6 @@ const MERGE_CONSTANTS = {
     TARGET: "target",
     CUSTOM: "custom",
     AUTO: "auto"
-  },
-  NOTES: {
-    ORIGINAL_VALUE_PREFIX: "原值:",
-    BASE_INFO_KEY: "baseInfo"
   }
 };
 
@@ -66,7 +54,6 @@ const ID_CHECKER_CONFIG = {
   ID_COLUMN_SUFFIX: '_INT_id',   // ID列的后缀
 };
 
-
 // 注释相关常量
 const NOTE_CONSTANTS = {
   // 系统注释使用键值对格式
@@ -86,7 +73,7 @@ const NOTE_CONSTANTS = {
   LINE_SEPARATOR: '\n'        // 行分隔符
 };
 
-// --------------------- 常量 ------------------------
+// --------------------- 常量 --------------------------------
 
 // --------------------- NoteManager ------------------------ 
 

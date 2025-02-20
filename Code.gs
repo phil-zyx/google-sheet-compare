@@ -37,17 +37,6 @@ function base64Decode(input, OPT_webSafe, OPT_plainText) {
 }
 
 /**
- * 获取所有表格名称
- * @returns {string[]} 所有表格名称
- */
-function getSheetNames() {
-  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
-  return sheets.map(function(sheet) {
-    return sheet.getName();
-  });
-}
-
-/**
  * 获取当前文档中所有表格的信息（带缓存）
  * @returns {Object} 包含所有表格名称和当前表格的对象
  */
