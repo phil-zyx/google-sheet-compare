@@ -2,706 +2,710 @@
 <html>
 
 <head>
-  <base target="_top">
-  <script>
-    // 初始化状态对象
-    const state = {
-      previewData: null
-    };
+    <base target="_top">
+    <script>
+        // 初始化状态对象
+        const state = {
+            previewData: null
+        };
 
-    // 初始化DOM元素缓存对象
-    const elements = {
-      sourceSheet: null,
-      targetSheet: null,
-      status: null,
-      skeleton: null,
-      content: null,
-      conflictPanel: null,
-      prePreviewButtons: null,
-      postPreviewButtons: null
-    };
-  </script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      color: #333;
-    }
-
-    .form-group {
-      margin-bottom: 20px;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-
-    select {
-      width: 100%;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      margin-bottom: 5px;
-    }
-
-    .button-group {
-      text-align: right;
-      margin-top: 25px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-    }
-
-    .button-group.post-preview {
-      display: none;
-    }
-
-    button {
-      padding: 8px 20px;
-      cursor: pointer;
-      border: none;
-      border-radius: 4px;
-      font-weight: 500;
-      min-width: 80px;
-    }
-
-    button.primary {
-      background-color: #4285f4;
-      color: white;
-    }
-
-    button.secondary {
-      background-color: #f1f3f4;
-      color: #333;
-    }
-
-    #status {
-      margin-top: 20px;
-      padding: 12px;
-      border-radius: 4px;
-      display: none;
-      font-size: 14px;
-      line-height: 1.4;
-    }
-
-    .help-text {
-      font-size: 12px;
-      color: #666;
-      margin-top: 4px;
-    }
-
-    .conflict-panel {
-      margin-top: 30px;
-      display: none;
-    }
-
-    .conflict-item {
-      border: 1px solid #ddd;
-      padding: 15px;
-      margin-bottom: 15px;
-      border-radius: 4px;
-      background-color: white;
-    }
-
-    .conflict-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 15px;
-    }
-
-    .conflict-actions button {
-      flex: 1;
-      margin: 0;
-    }
-
-    .source-value,
-    .target-value {
-      background-color: #f5f5f5;
-      padding: 8px;
-      margin: 8px 0;
-      border-radius: 4px;
-      font-family: monospace;
-    }
-
-    .spinner {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid #f3f3f3;
-      border-top: 2px solid #3498db;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-
-    /* 骨架屏样式 */
-    .skeleton {
-      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-      background-size: 200% 100%;
-      animation: loading 1.5s infinite;
-      border-radius: 4px;
-      height: 36px;
-      margin-bottom: 8px;
-    }
-
-    @keyframes loading {
-      0% {
-        background-position: 200% 0;
-      }
-
-      100% {
-        background-position: -200% 0;
-      }
-    }
-
-    /* 淡入效果 */
-    .fade-in {
-      opacity: 0;
-      transition: opacity 0.3s ease-in;
-    }
-
-    .fade-in.visible {
-      opacity: 1;
-    }
-
-    /* 滚动容器 */
-    .scroll-container {
-      max-height: 400px;
-      overflow-y: auto;
-      margin-top: 20px;
-    }
-
-    /* 自定义滚动条 */
-    .scroll-container::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .scroll-container::-webkit-scrollbar-track {
-      background: #f1f1f1;
-      border-radius: 4px;
-    }
-
-    .scroll-container::-webkit-scrollbar-thumb {
-      background: #888;
-      border-radius: 4px;
-    }
-
-    .scroll-container::-webkit-scrollbar-thumb:hover {
-      background: #555;
-    }
-
-    .preview-mode .pre-preview {
-      display: none;
-    }
-
-    .preview-mode .post-preview {
-      display: block;
-    }
-
-    .pre-preview .post-preview {
-      display: none;
-    }
-
-    #previewInfo {
-      margin: 20px 0;
-      padding: 15px;
-      border-radius: 4px;
-      background-color: #f8f9fa;
-      border: 1px solid #e9ecef;
-    }
-
-    .preview-info p {
-      margin: 8px 0;
-      line-height: 1.4;
-    }
-
-    .preview-info strong {
-      color: #1a73e8;
-      margin-right: 8px;
-    }
-
-    #content {
-      opacity: 0;
-      transition: opacity 0.3s ease-in-out;
-    }
-
-    #content.visible {
-      opacity: 1;
-    }
-  </style>
+        // 初始化DOM元素缓存对象
+        const elements = {
+            sourceSheet: null,
+            targetSheet: null,
+            status: null,
+            skeleton: null,
+            content: null,
+            conflictPanel: null,
+            prePreviewButtons: null,
+            postPreviewButtons: null
+        };
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+        
+        .button-group {
+            text-align: right;
+            margin-top: 25px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .button-group.post-preview {
+            display: none;
+        }
+        
+        button {
+            padding: 8px 20px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-weight: 500;
+            min-width: 80px;
+        }
+        
+        button.primary {
+            background-color: #4285f4;
+            color: white;
+        }
+        
+        button.secondary {
+            background-color: #f1f3f4;
+            color: #333;
+        }
+        
+        #status {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 4px;
+            display: none;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        .conflict-panel,
+        .conflict-item,
+        .conflict-actions,
+        .source-value,
+        .target-value {
+            display: none;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        /* 骨架屏样式 */
+        
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+            height: 36px;
+            margin-bottom: 8px;
+        }
+        
+        @keyframes loading {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+        /* 淡入效果 */
+        
+        .fade-in {
+            opacity: 0;
+            transition: opacity 0.3s ease-in;
+        }
+        
+        .fade-in.visible {
+            opacity: 1;
+        }
+        /* 滚动容器 */
+        
+        .scroll-container {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        /* 自定义滚动条 */
+        
+        .scroll-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .scroll-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        .scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        .preview-mode .pre-preview {
+            display: none;
+        }
+        
+        .preview-mode .post-preview {
+            display: block;
+        }
+        
+        .pre-preview .post-preview {
+            display: none;
+        }
+        
+        #previewInfo {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+        
+        .preview-info p {
+            margin: 8px 0;
+            line-height: 1.4;
+        }
+        
+        .preview-info strong {
+            color: #1a73e8;
+            margin-right: 8px;
+        }
+        
+        #content {
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        #content.visible {
+            opacity: 1;
+        }
+        /* Loading 遮罩层样式 */
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .loading-content {
+            text-align: center;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        .loading-text {
+            color: #333;
+            font-size: 14px;
+        }
+    </style>
 </head>
 
 <body>
-  <!-- 骨架屏 -->
-  <div id="skeleton">
-    <div class="form-group">
-      <div class="skeleton"></div>
-      <div class="skeleton"></div>
-    </div>
-    <div class="form-group">
-      <div class="skeleton"></div>
-      <div class="skeleton"></div>
-    </div>
-  </div>
-
-  <!-- 主要内容区域 -->
-  <div id="content" class="fade-in" style="display: none;">
-    <div class="form-group">
-      <label for="sourceSheet">源表格</label>
-      <select id="sourceSheet"></select>
+    <!-- 添加 Loading 遮罩层 -->
+    <div class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">正在执行合并...</div>
+        </div>
     </div>
 
-    <div class="form-group">
-      <label for="targetSheet">目标表格</label>
-      <select id="targetSheet"></select>
+    <!-- 骨架屏 -->
+    <div id="skeleton">
+        <div class="form-group">
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+        </div>
+        <div class="form-group">
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+        </div>
     </div>
 
-    <!-- 预览信息区域 -->
-    <div id="previewInfo" style="display: none;"></div>
+    <!-- 主要内容区域 -->
+    <div id="content" class="fade-in" style="display: none;">
+        <div class="form-group">
+            <label for="sourceSheet">源表格</label>
+            <select id="sourceSheet"></select>
+        </div>
 
-    <div id="conflictPanel" class="conflict-panel"></div>
+        <div class="form-group">
+            <label for="targetSheet">目标表格</label>
+            <select id="targetSheet"></select>
+        </div>
 
-    <div id="status"></div>
+        <!-- 预览信息区域 -->
+        <div id="previewInfo" style="display: none;"></div>
 
-    <div class="button-group pre-preview">
-      <button class="secondary" onclick="closeDialog()">取消</button>
-      <button class="primary" onclick="startMergeProcess()">合并</button>
+        <div id="status"></div>
+
+        <div class="button-group pre-preview">
+            <button class="primary" onclick="startMergeProcess()">合并</button>
+        </div>
+
+        <div class="button-group post-preview">
+            <button class="secondary" onclick="closeDialog()">关闭</button>
+            <button class="primary" onclick="confirmMerge()">确认合并</button>
+        </div>
     </div>
 
-    <div class="button-group post-preview">
-      <button class="secondary" onclick="closeDialog()">关闭</button>
-      <button class="primary" onclick="confirmMerge()">确认合并</button>
-    </div>
-  </div>
+    <script>
+        // 使用立即执行函数来避免全局变量污染
+        (function() {
+            // 缓存DOM引用
+            const elements = {
+                sourceSheet: null,
+                targetSheet: null,
+                status: null,
+                skeleton: null,
+                content: null,
+                buttons: null,
+                conflictPanel: null,
+                prePreviewButtons: null,
+                postPreviewButtons: null
+            };
 
-  <script>
-    // 使用立即执行函数来避免全局变量污染
-    (function () {
-      // 缓存DOM引用
-      const elements = {
-        sourceSheet: null,
-        targetSheet: null,
-        status: null,
-        skeleton: null,
-        content: null,
-        buttons: null,
-        conflictPanel: null,
-        prePreviewButtons: null,
-        postPreviewButtons: null
-      };
+            // 状态管理
+            const state = {
+                isLoading: false,
+                previewData: null,
+                conflicts: [],
+                sheets: null,
+                currentSheet: null
+            };
 
-      // 状态管理
-      const state = {
-        isLoading: false,
-        previewData: null,
-        conflicts: [],
-        sheets: null,
-        currentSheet: null
-      };
+            // 加载表格信息
+            function loadSheetInfo() {
+                toggleLoading(true, '加载表格信息...');
+                state.isLoading = true;
+                google.script.run
+                    .withSuccessHandler(function(result) {
+                        state.sheets = result.sheets;
+                        state.currentSheet = result.activeSheet;
+                        loadSheets(result.sheets, result.activeSheet);
+                        showContent();
+                        state.isLoading = false;
+                        toggleLoading(false);
+                    })
+                    .withFailureHandler(function(error) {
+                        handleMergeError(error);
+                        state.isLoading = false;
+                        toggleLoading(false);
+                    })
+                    .getSheetInfo();
+            }
 
-      // 加载表格信息
-      function loadSheetInfo() {
-        state.isLoading = true;
-        google.script.run
-          .withSuccessHandler(function (result) {
-            state.sheets = result.sheets;
-            state.currentSheet = result.currentSheet;
-            loadSheets(result.sheets, result.currentSheet);
-            showContent();
-            state.isLoading = false;
-          })
-          .withFailureHandler(function (error) {
-            handleMergeError(error);
-            state.isLoading = false;
-          })
-          .getSheetInfo();
-      }
+            // 显示主要内容
+            function showContent() {
+                if (elements.skeleton && elements.content) {
+                    elements.skeleton.style.display = 'none';
+                    elements.content.style.display = 'block';
+                    // 添加淡入效果
+                    setTimeout(() => {
+                        elements.content.classList.add('visible');
+                    }, 50);
+                }
+            }
 
-      // 显示主要内容
-      function showContent() {
-        if (elements.skeleton && elements.content) {
-          elements.skeleton.style.display = 'none';
-          elements.content.style.display = 'block';
-          // 添加淡入效果
-          setTimeout(() => {
-            elements.content.classList.add('visible');
-          }, 50);
-        }
-      }
+            // 加载表格选项
+            function loadSheets(sheets, currentSheet) {
+                if (!sheets || !Array.isArray(sheets)) return;
 
-      // 加载表格选项
-      function loadSheets(sheets, currentSheet) {
-        if (!sheets || !Array.isArray(sheets)) return;
+                const sourceSheet = elements.sourceSheet;
+                const targetSheet = elements.targetSheet;
 
-        const sourceSheet = elements.sourceSheet;
-        const targetSheet = elements.targetSheet;
+                if (!sourceSheet || !targetSheet) {
+                    console.error('Source or target sheet elements not found');
+                    return;
+                }
 
-        if (!sourceSheet || !targetSheet) {
-          console.error('Source or target sheet elements not found');
-          return;
-        }
+                // 清空现有选项
+                sourceSheet.innerHTML = '';
+                targetSheet.innerHTML = '';
 
-        // 清空现有选项
-        sourceSheet.innerHTML = '';
-        targetSheet.innerHTML = '';
+                // 源表格只显示当前表格并禁用
+                const sourceOption = document.createElement('option');
+                sourceOption.value = currentSheet;
+                sourceOption.textContent = currentSheet;
+                sourceSheet.appendChild(sourceOption);
+                sourceSheet.disabled = true;
 
-        // 源表格只显示当前表格并禁用
-        const sourceOption = document.createElement('option');
-        sourceOption.value = currentSheet;
-        sourceOption.textContent = currentSheet;
-        sourceSheet.appendChild(sourceOption);
-        sourceSheet.disabled = true;
+                // 目标表格添加默认选项
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '请选择表格...';
+                targetSheet.appendChild(defaultOption);
 
-        // 目标表格添加默认选项
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = '请选择表格...';
-        targetSheet.appendChild(defaultOption);
+                // 获取当前页签的A1单元格注释，查找来源页签信息
+                google.script.run
+                    .withSuccessHandler(function(note) {
+                        // 从系统注释中提取来源页签信息
+                        const sourceSheetInfo = note && note.match(/来源页签：(.*?)(?:\n|$)/);
+                        const sourceSheetName = sourceSheetInfo ? sourceSheetInfo[1] : null;
 
-        // 目标表格添加其他表格选项（排除当前表格）
-        sheets.forEach(sheetName => {
-          if (sheetName !== currentSheet) {
-            const option = document.createElement('option');
-            option.value = sheetName;
-            option.textContent = sheetName;
-            targetSheet.appendChild(option);
-          }
-        });
-      }
+                        // 目标表格添加其他表格选项（排除当前表格）
+                        sheets.forEach(sheetName => {
+                            if (sheetName !== currentSheet) {
+                                const option = document.createElement('option');
+                                option.value = sheetName;
+                                option.textContent = sheetName;
+                                targetSheet.appendChild(option);
 
-      // 开始合并流程
-      function startMergeProcess() {
-        var sourceSheet = document.getElementById('sourceSheet').value;
-        var targetSheet = document.getElementById('targetSheet').value;
+                                // 如果找到来源页签信息，自动选择对应的表格
+                                if (sourceSheetName && sheetName === sourceSheetName) {
+                                    option.selected = true;
+                                }
+                            }
+                        });
+                    })
+                    .withFailureHandler(function(error) {
+                        console.error('获取A1单元格注释失败:', error);
+                        // 发生错误时，仍然加载所有表格选项，但不自动选择
+                        sheets.forEach(sheetName => {
+                            if (sheetName !== currentSheet) {
+                                const option = document.createElement('option');
+                                option.value = sheetName;
+                                option.textContent = sheetName;
+                                targetSheet.appendChild(option);
+                            }
+                        });
+                    })
+                    .getCurrentSheetA1Note();
+            }
 
-        if (!sourceSheet || !targetSheet) {
-          showStatus('请选择源表格和目标表格', true);
-          return;
-        }
+            // 开始合并流程
+            function startMergeProcess() {
+                var sourceSheet = document.getElementById('sourceSheet').value;
+                var targetSheet = document.getElementById('targetSheet').value;
 
-        if (sourceSheet === targetSheet) {
-          showStatus('源表格和目标表格不能相同', true);
-          return;
-        }
+                if (!sourceSheet || !targetSheet) {
+                    showStatus('请选择源表格和目标表格', true);
+                    return;
+                }
 
-        showStatus('正在生成预览...', false);
-        document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+                if (sourceSheet === targetSheet) {
+                    showStatus('源表格和目标表格不能相同', true);
+                    return;
+                }
 
-        google.script.run
-          .withSuccessHandler(handlePreviewSuccess)
-          .withFailureHandler(handleMergeError)
-          .previewMerge({
-            sourceSheet: sourceSheet,
-            targetSheet: targetSheet
-          });
-      }
+                showStatus('正在生成预览...', false);
+                toggleLoading(true, '正在生成预览...');
+                document.querySelectorAll('button').forEach(btn => btn.disabled = true);
 
-      // 处理预览成功
-      function handlePreviewSuccess(result) {
-        document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+                google.script.run
+                    .withSuccessHandler(function(result) {
+                        toggleLoading(false);
+                        handlePreviewSuccess(result);
+                    })
+                    .withFailureHandler(function(error) {
+                        toggleLoading(false);
+                        handleMergeError(error);
+                    })
+                    .previewMerge({
+                        sourceSheet: sourceSheet,
+                        targetSheet: targetSheet
+                    });
+            }
 
-        if (result.success) {
-          // 保存到本地状态
-          state.previewData = result;
-          // 保存预览状态到服务器
-          google.script.run.withSuccessHandler(() => {
-            // 关闭对话框让用户查看预览
-            closeDialog();
-            // 显示提示
-            google.script.run.showAlert(`预览表格已生成：${result.previewSheetName}\n请查看预览内容，确认无误后点击菜单"配置表工具 > 合并表格"继续。`);
-          }).savePreviewState(result);
-        } else {
-          showStatus(result.message, true);
-        }
-      }
+            // 处理预览成功
+            function handlePreviewSuccess(result) {
+                document.querySelectorAll('button').forEach(btn => btn.disabled = false);
 
-      // 显示确认界面
-      function showConfirmView() {
-        console.log('开始显示确认界面，预览数据:', state.previewData);
+                if (result.success) {
+                    // 保存到本地状态
+                    state.previewData = result;
+                    // 保存预览状态到服务器
+                    google.script.run.withSuccessHandler(() => {
+                        // 关闭对话框让用户查看预览
+                        closeDialog();
+                        // 显示提示
+                        google.script.run.showAlert(`预览表格已生成：${result.previewSheetName}\n请查看预览内容，确认无误后点击菜单"配置表工具 > 合并表格"继续。`);
+                    }).savePreviewState(result);
+                } else {
+                    showStatus(result.message, true);
+                }
+            }
 
-        if (!state.previewData) {
-          console.error('没有预览数据');
-          return;
-        }
+            // 显示确认界面
+            function showConfirmView() {
+                if (!state.previewData) {
+                    console.error('没有预览数据');
+                    return;
+                }
 
-        // 确保DOM元素已初始化
-        if (!elements.content || !elements.skeleton) {
-          console.error('DOM元素未初始化');
-          return;
-        }
+                // 确保DOM元素已初始化
+                if (!elements.content || !elements.skeleton) {
+                    console.error('DOM元素未初始化');
+                    return;
+                }
 
-        // 隐藏骨架屏，显示内容
-        elements.skeleton.style.display = 'none';
-        elements.content.style.display = 'block';
+                // 隐藏骨架屏，显示内容
+                elements.skeleton.style.display = 'none';
+                elements.content.style.display = 'block';
 
-        // 隐藏表格选择区域
-        const formGroups = document.querySelectorAll('.form-group');
-        formGroups.forEach(group => group.style.display = 'none');
+                // 隐藏表格选择区域
+                const formGroups = document.querySelectorAll('.form-group');
+                formGroups.forEach(group => group.style.display = 'none');
 
-        // 显示预览信息
-        const previewInfo = document.getElementById('previewInfo');
-        if (previewInfo) {
-          previewInfo.style.display = 'block';
-          previewInfo.innerHTML = `
+                // 显示预览信息
+                const previewInfo = document.getElementById('previewInfo');
+                if (previewInfo) {
+                    previewInfo.style.display = 'block';
+                    previewInfo.innerHTML = `
             <div class="preview-info">
               <p><strong>源表格：</strong>${state.previewData.sourceSheet}</p>
               <p><strong>目标表格：</strong>${state.previewData.targetSheet}</p>
               <p><strong>预览表格：</strong>${state.previewData.previewSheetName}</p>
               <p><strong>新增行数：</strong>${state.previewData.changes?.newRows?.length || 0}</p>
-              <p><strong>冲突行数：</strong>${state.previewData.changes?.conflicts?.length || 0}</p>
             </div>
           `;
-        }
+                }
 
-        // 切换按钮组
-        if (elements.prePreviewButtons) {
-          elements.prePreviewButtons.style.display = 'none';
-        }
-        if (elements.postPreviewButtons) {
-          elements.postPreviewButtons.style.display = 'flex';
-        }
+                // 切换按钮组
+                if (elements.prePreviewButtons) {
+                    elements.prePreviewButtons.style.display = 'none';
+                }
+                if (elements.postPreviewButtons) {
+                    elements.postPreviewButtons.style.display = 'flex';
+                }
 
-        // 如果有冲突，显示冲突信息
-        if (state.previewData.changes?.conflicts?.length > 0) {
-          showConflicts(state.previewData.changes.conflicts);
-        }
-
-        // 添加淡入效果
-        setTimeout(() => {
-          elements.content.classList.add('visible');
-        }, 50);
-      }
-
-      // 显示确认对话框的回调
-      function handleShowConfirmDialog() {
-        if (state.previewData) {
-          // 对话框打开后，设置为预览模式
-          document.body.classList.add('preview-mode');
-
-          // 更新预览信息
-          const previewInfo = document.getElementById('previewInfo');
-          previewInfo.innerHTML = `预览表格：<strong>${state.previewData.previewSheetName}</strong><br>新增行数：${state.previewData.changes.newRows.length}<br>冲突行数：${state.previewData.changes.conflicts.length}`;
-          previewInfo.classList.add('show');
-
-          showStatus('请确认预览内容无误');
-
-          // 如果有冲突，显示冲突信息
-          if (state.previewData.changes && state.previewData.changes.conflicts && state.previewData.changes.conflicts.length > 0) {
-            showConflicts(state.previewData.changes.conflicts);
-          }
-        }
-      }
-
-      // 确认合并
-      function confirmMerge() {
-        if (!state.previewData) {
-          showStatus('请先生成预览', true);
-          return;
-        }
-
-        showStatus('正在执行合并...', false);
-        document.querySelectorAll('button').forEach(btn => btn.disabled = true);
-
-        google.script.run
-          .withSuccessHandler(handleMergeSuccess)
-          .withFailureHandler(handleMergeError)
-          .confirmMergeFromPreview(
-            state.previewData.sourceSheet,
-            state.previewData.targetSheet,
-            state.previewData.previewSheetName
-          );
-      }
-
-      // 处理合并成功
-      function handleMergeSuccess(result) {
-        state.isLoading = false;
-        document.querySelectorAll('button').forEach(btn => btn.disabled = false);
-
-        if (result.success) {
-          showStatus(result.message);
-          setTimeout(closeDialog, 2000);
-        } else {
-          showStatus(result.message, true);
-        }
-      }
-
-      // 处理合并错误
-      function handleMergeError(error) {
-        state.isLoading = false;
-        document.querySelectorAll('button').forEach(btn => btn.disabled = false);
-        showStatus(error.message || '合并过程中发生错误', true);
-      }
-
-      // 显示冲突
-      function showConflicts(conflicts) {
-        if (!conflicts || !Array.isArray(conflicts)) {
-          console.log('没有冲突数据或数据格式不正确');
-          return;
-        }
-
-        const container = elements.conflictPanel;
-        if (!container) {
-          console.error('找不到冲突面板元素');
-          return;
-        }
-
-        container.innerHTML = '';
-        container.style.display = 'block';
-
-        conflicts.forEach((conflict, index) => {
-          // 确保冲突数据格式正确
-          if (!conflict.columns || !Array.isArray(conflict.columns)) {
-            console.warn('跳过格式不正确的冲突数据:', conflict);
-            return;
-          }
-
-          // 为每个冲突列创建显示
-          conflict.columns.forEach(col => {
-            const conflictElement = document.createElement('div');
-            conflictElement.className = 'conflict-item fade-in';
-            conflictElement.innerHTML = `
-              <div>行 ${conflict.targetRowIndex + 1} - ${col.header}</div>
-              <div class="source-value">源值: ${col.sourceValue}</div>
-              <div class="target-value">目标值: ${col.targetValue}</div>
-              <div class="conflict-actions">
-                <button onclick="resolveConflict({
-                  row: ${conflict.targetRowIndex + 1},
-                  header: '${col.header}',
-                  value: '${col.sourceValue}'
-                })" class="secondary">使用源值</button>
-                <button onclick="resolveConflict({
-                  row: ${conflict.targetRowIndex + 1},
-                  header: '${col.header}',
-                  value: '${col.targetValue}'
-                })" class="secondary">使用目标值</button>
-              </div>
-            `;
-            container.appendChild(conflictElement);
-            setTimeout(() => conflictElement.classList.add('visible'), 50 * index);
-          });
-        });
-      }
-
-      // 解决冲突
-      function resolveConflict(config) {
-        if (state.isLoading) return;
-        state.isLoading = true;
-
-        showStatus('正在解决冲突...', false);
-
-        google.script.run
-          .withSuccessHandler(function (result) {
-            state.isLoading = false;
-            if (result.success) {
-              showStatus('冲突已解决', false);
-              // 重新加载预览状态
-              google.script.run
-                .withSuccessHandler(function (previewState) {
-                  if (previewState && previewState.success) {
-                    state.previewData = previewState;
-                    showConfirmView();
-                  }
-                })
-                .getPreviewState();
-            } else {
-              showStatus('解决冲突失败：' + (result.message || '未知错误'), true);
+                // 添加淡入效果
+                setTimeout(() => {
+                    elements.content.classList.add('visible');
+                }, 50);
             }
-          })
-          .withFailureHandler(function (error) {
-            state.isLoading = false;
-            showStatus('解决冲突时发生错误：' + error.message, true);
-          })
-          .resolveConflict(config);
-      }
 
-      // 显示状态信息
-      function showStatus(message, isError = false) {
-        const statusElement = elements.status;
-        if (!statusElement) return;
+            // 显示确认对话框的回调
+            function handleShowConfirmDialog() {
+                if (state.previewData) {
+                    // 对话框打开后，设置为预览模式
+                    document.body.classList.add('preview-mode');
 
-        statusElement.style.display = 'block';
-        statusElement.style.backgroundColor = isError ? '#fde7e9' : '#e6f4ea';
-        statusElement.style.color = isError ? '#c62828' : '#1e8e3e';
-        statusElement.innerHTML = state.isLoading ? `<span class="spinner"></span> ${message}` : message;
-      }
+                    // 更新预览信息
+                    const previewInfo = document.getElementById('previewInfo');
+                    previewInfo.innerHTML = `
+            <div class="preview-info">
+              <p><strong>预览表格：</strong>${state.previewData.previewSheetName}</p>
+              <p><strong>新增行数：</strong>${state.previewData.changes.newRows.length}</p>
+            </div>
+          `;
+                    previewInfo.classList.add('show');
 
-      // 关闭对话框
-      function closeDialog() {
-        // 只有在没有预览数据时才重置UI状态
-        if (!state.previewData) {
-          document.getElementById('content').style.display = 'none';
-          document.getElementById('skeleton').style.display = 'block';
-          document.getElementById('status').style.display = 'none';
-          document.getElementById('conflictPanel').style.display = 'none';
-        }
-
-        // 关闭对话框
-        google.script.host.close();
-      }
-
-      // 初始化对话框
-      function initializeDialog() {
-        console.log('开始初始化对话框');
-        // 缓存DOM元素
-        elements.sourceSheet = document.getElementById('sourceSheet');
-        elements.targetSheet = document.getElementById('targetSheet');
-        elements.status = document.getElementById('status');
-        elements.skeleton = document.getElementById('skeleton');
-        elements.content = document.getElementById('content');
-        elements.conflictPanel = document.getElementById('conflictPanel');
-        elements.prePreviewButtons = document.querySelector('.button-group.pre-preview');
-        elements.postPreviewButtons = document.querySelector('.button-group.post-preview');
-        console.log('初始化DOM元素完成:', elements);
-
-        // 检查是否有预览状态
-        google.script.run
-          .withSuccessHandler(function (previewState) {
-            console.log('获取到预览状态:', previewState);
-            if (previewState && previewState.success) {
-              // 保存到本地状态
-              state.previewData = previewState;
-              console.log('保存预览状态到本地:', state.previewData);
-              // 直接显示确认界面
-              showConfirmView();
-            } else {
-              console.log('没有预览状态，加载初始界面');
-              // 否则加载初始界面
-              loadSheetInfo();
+                    showStatus('请确认预览内容无误');
+                }
             }
-          })
-          .withFailureHandler(function (error) {
-            console.error('初始化失败:', error);
-            loadSheetInfo();
-          })
-          .getPreviewState();
-      }
 
-      // 初始化
-      google.script.run.withSuccessHandler(function () {
-        initializeDialog();
-      }).withFailureHandler(function (error) {
-        console.error('初始化失败:', error);
-      }).getSheetInfo();
+            // 显示/隐藏 loading
+            function toggleLoading(show, message = '正在执行合并...') {
+                const loadingOverlay = document.querySelector('.loading-overlay');
+                const loadingText = document.querySelector('.loading-text');
+                if (show) {
+                    loadingText.textContent = message;
+                    loadingOverlay.style.display = 'flex';
+                } else {
+                    loadingOverlay.style.display = 'none';
+                }
+            }
 
-      // 暴露必要的函数到全局作用域
-      window.startMergeProcess = startMergeProcess;
-      window.confirmMerge = confirmMerge;
-      window.resolveConflict = resolveConflict;
-      window.closeDialog = closeDialog;
-      window.handleShowConfirmDialog = handleShowConfirmDialog;
-    })();
-  </script>
+            // 确认合并
+            function confirmMerge() {
+                if (!state.previewData) {
+                    showStatus('请先生成预览', true);
+                    return;
+                }
+
+                // 显示 loading
+                toggleLoading(true);
+
+                // 禁用所有按钮
+                document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+
+                google.script.run
+                    .withSuccessHandler(function(result) {
+                        // 隐藏 loading
+                        toggleLoading(false);
+
+                        // 启用所有按钮
+                        document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+
+                        if (result.success) {
+                            showStatus(result.message);
+                            setTimeout(closeDialog, 2000);
+                        } else {
+                            showStatus(result.message, true);
+                        }
+                    })
+                    .withFailureHandler(function(error) {
+                        // 隐藏 loading
+                        toggleLoading(false);
+
+                        // 启用所有按钮
+                        document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+
+                        showStatus(error.message || '合并过程中发生错误', true);
+                    })
+                    .confirmMergeFromPreview(
+                        state.previewData.sourceSheet,
+                        state.previewData.targetSheet,
+                        state.previewData.previewSheetName
+                    );
+            }
+
+            // 处理合并错误
+            function handleMergeError(error) {
+                state.isLoading = false;
+                document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+                showStatus(error.message || '合并过程中发生错误', true);
+            }
+
+            // 显示状态信息
+            function showStatus(message, isError = false) {
+                const statusElement = elements.status;
+                if (!statusElement) return;
+
+                statusElement.style.display = 'block';
+                statusElement.style.backgroundColor = isError ? '#fde7e9' : '#e6f4ea';
+                statusElement.style.color = isError ? '#c62828' : '#1e8e3e';
+                statusElement.innerHTML = state.isLoading ? `<span class="spinner"></span> ${message}` : message;
+            }
+
+            // 关闭对话框
+            function closeDialog() {
+                // 只有在没有预览数据时才重置UI状态
+                if (!state.previewData) {
+                    document.getElementById('content').style.display = 'none';
+                    document.getElementById('skeleton').style.display = 'block';
+                    document.getElementById('status').style.display = 'none';
+                    document.getElementById('conflictPanel').style.display = 'none';
+                }
+
+                // 关闭对话框
+                google.script.host.close();
+            }
+
+            // 初始化对话框
+            function initializeDialog() {
+                console.log('开始初始化对话框');
+                toggleLoading(true, '初始化对话框...');
+                // 缓存DOM元素
+                elements.sourceSheet = document.getElementById('sourceSheet');
+                elements.targetSheet = document.getElementById('targetSheet');
+                elements.status = document.getElementById('status');
+                elements.skeleton = document.getElementById('skeleton');
+                elements.content = document.getElementById('content');
+                elements.conflictPanel = document.getElementById('conflictPanel');
+                elements.prePreviewButtons = document.querySelector('.button-group.pre-preview');
+                elements.postPreviewButtons = document.querySelector('.button-group.post-preview');
+                console.log('初始化DOM元素完成:', elements);
+
+                // 获取当前页签名称，解析源表和目标表
+                google.script.run
+                    .withSuccessHandler(function(sheetName) {
+                        console.log('当前页签名称:', sheetName);
+                        const match = sheetName.match(/^(.*?)\s*->\s*(.*?)\s*合并预览$/);
+
+                        if (match) {
+                            const [_, sourceSheet, targetSheet] = match;
+                            console.log('解析出的源表和目标表:', {
+                                sourceSheet,
+                                targetSheet
+                            });
+
+                            // 检查预览状态
+                            google.script.run
+                                .withSuccessHandler(function(previewState) {
+                                    console.log('获取到预览状态:', previewState);
+                                    if (previewState && previewState.success) {
+                                        state.previewData = previewState;
+                                        console.log('保存预览状态到本地:', state.previewData);
+                                        showConfirmView();
+                                    } else {
+                                        console.log('没有预览状态，加载初始界面');
+                                        loadSheetInfo();
+                                    }
+                                    toggleLoading(false);
+                                })
+                                .withFailureHandler(function(error) {
+                                    console.error('获取预览状态失败:', error);
+                                    loadSheetInfo();
+                                    toggleLoading(false);
+                                })
+                                .getPreviewState(sourceSheet.trim(), targetSheet.trim());
+                        } else {
+                            console.log('不是预览页签，加载初始界面');
+                            loadSheetInfo();
+                            toggleLoading(false);
+                        }
+                    })
+                    .withFailureHandler(function(error) {
+                        console.error('获取页签名称失败:', error);
+                        loadSheetInfo();
+                        toggleLoading(false);
+                    })
+                    .getCurrentSheetName();
+            }
+
+            // 初始化
+            google.script.run.withSuccessHandler(function() {
+                initializeDialog();
+            }).withFailureHandler(function(error) {
+                console.error('初始化失败:', error);
+            }).getSheetInfo();
+
+            // 暴露必要的函数到全局作用域
+            window.startMergeProcess = startMergeProcess;
+            window.confirmMerge = confirmMerge;
+            window.closeDialog = closeDialog;
+            window.handleShowConfirmDialog = handleShowConfirmDialog;
+        })();
+    </script>
 </body>
 
 </html>
