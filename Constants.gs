@@ -86,6 +86,10 @@ const NOTE_CONSTANTS = {
   LINE_SEPARATOR: '\n'        // 行分隔符
 };
 
+// --------------------- 常量 ------------------------
+
+// --------------------- NoteManager ------------------------ 
+
 /**
  * 注释管理工具类
  */
@@ -212,4 +216,33 @@ class NoteManager {
     
     return `${originalNote.trim()}\n${systemNote}`;
   }
+
+  /**
+   * 移除单元格中指定类型的标记
+   * @param {Range} cell 目标单元格
+   * @param {string} type 要移除的标记类型
+   * @returns {boolean} 是否成功移除标记
+   */
+  static removeMarkFromCell(cell, type) {
+    if (!cell) return false;
+    
+    const note = cell.getNote();
+    if (!note) return false;
+    
+    const newNote = this.removeSystemNote(note, type);
+    
+    // 如果注释内容没有变化，说明没有找到对应类型的标记
+    if (newNote === note) return false;
+    
+    // 如果新注释为空，则完全清除注释
+    if (newNote.trim() === '') {
+      cell.clearNote();
+    } else {
+      cell.setNote(newNote);
+    }
+    
+    return true;
+  }
 } 
+
+// --------------------- NoteManager ------------------------ 

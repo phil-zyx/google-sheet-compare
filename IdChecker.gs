@@ -38,17 +38,20 @@ function checkSingleIdConflict({ value, sheet: sheetName, row, column, columnNam
  * 检查ID冲突并标记
  */
 function checkIdConflicts(editedCell) {
-  clearIdConflictHighlights();
   
   if (!editedCell) return;
   
   const { sheet, range } = editedCell;
   const value = range.getValue();
   if (!value) {
-    range.setBackground(null).setNote(null);
+    range.setBackground(null);
+    NoteManager.removeMarkFromCell(range, NOTE_CONSTANTS.TYPES.CONFLICT);
     return;
   }
   
+  // 先移除历史标记
+  NoteManager.removeMarkFromCell(range, NOTE_CONSTANTS.TYPES.CONFLICT);
+
   const headerValue = sheet.getRange(1, range.getColumn()).getValue();
   const conflicts = checkSingleIdConflict({
     value,
@@ -60,17 +63,16 @@ function checkIdConflicts(editedCell) {
   
   if (conflicts.length > 0) {
     const conflictLocations = conflicts.map(loc => `${loc.sheet} 第${loc.row}行`).join('\n');
-    const userNote = `${headerValue} ID冲突:\n在以下位置重复:\n${conflictLocations}`;
+    const userNote = `在以下位置重复:\n${conflictLocations}`;
     
-    range
-      .setBackground(ID_CHECKER_CONFIG.COLORS.CONFLICT)
-      .setNote(NoteManager.addSystemNote(
-        userNote,
-        NOTE_CONSTANTS.TYPES.CONFLICT,
-        JSON.stringify({ locations: conflicts.map(({sheet, row}) => ({sheet, row})) })
-      ));
+    range.setBackground(ID_CHECKER_CONFIG.COLORS.CONFLICT);
+    range.setNote(NoteManager.addSystemNote(
+      null,
+      NOTE_CONSTANTS.TYPES.CONFLICT,  // 标记类型
+      userNote
+    ));
     
-    SpreadsheetApp.getActiveSpreadsheet().toast('发现ID冲突，已用红色标记。', '警告', 5);
+    SpreadsheetApp.getActiveSpreadsheet().toast('发现ID冲突，已用红色标记。', '警告', 3);
   }
 }
 
