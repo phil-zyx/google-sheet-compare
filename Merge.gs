@@ -278,13 +278,6 @@ function extractBaseValue(note) {
 }
 
 /**
- * 添加基准值到注释
- */
-function addBaseValue(value) {
-  return NoteManager.addSystemNote('', NOTE_CONSTANTS.TYPES.BASE_VALUE, value.toString());
-}
-
-/**
  * 确认合并预览表到目标表
  * @param {string} sourceSheetName 源表格名称
  * @param {string} targetSheetName 目标表格名称

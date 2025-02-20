@@ -75,27 +75,3 @@ function checkIdConflicts(editedCell) {
     SpreadsheetApp.getActiveSpreadsheet().toast('发现ID冲突，已用红色标记。', '警告', 3);
   }
 }
-
-/**
- * 清除所有ID冲突标记
- */
-function clearIdConflictHighlights() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  ss.getSheets().forEach(sheet => {
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    
-    headers.forEach((header, index) => {
-      if (!header?.toString().endsWith(ID_CHECKER_CONFIG.ID_COLUMN_SUFFIX)) return;
-      
-      const lastRow = sheet.getLastRow();
-      if (lastRow > 1) {
-        sheet.getRange(2, index + 1, lastRow - 1, 1)
-          .setBackground(null)
-          .clearNote();
-      }
-    });
-  });
-  
-  ss.toast('已清除所有ID冲突标记。', '提示', 3);
-}
