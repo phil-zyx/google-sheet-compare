@@ -1,27 +1,63 @@
 /**
- * 设置编辑触发器
- * 如果已存在则先删除再创建新的触发器
+ * 安装时触发，设置必要的触发器
  */
-function createEditTrigger() {
+function onInstall(e) {
+  onOpen(e);
+  createEditTrigger(false);
+}
+
+/**
+ * 卸载时触发，清理所有触发器
+ */
+function onUninstall(e) {
   try {
-    // 删除现有的编辑触发器
     const triggers = ScriptApp.getProjectTriggers();
+    const scriptId = ScriptApp.getScriptId();
+    
     triggers.forEach(trigger => {
-      if (trigger.getHandlerFunction() === 'onEdit') {
+      // 只删除由当前脚本创建的触发器
+      if (trigger.getScriptId() === scriptId) {
         ScriptApp.deleteTrigger(trigger);
       }
     });
-    
-    // 创建新的编辑触发器
-    const ss = SpreadsheetApp.getActive();
-    ScriptApp.newTrigger('onEdit')
-      .forSpreadsheet(ss)
-      .onEdit()
-      .create();
-      
-    SpreadsheetApp.getActive().toast('编辑触发器已安装', '提示', 3);
   } catch (error) {
-    Logger.log('Error creating edit trigger: ' + error);
+    console.error('Error cleaning up triggers:', error);
+  }
+}
+
+/**
+ * 设置编辑触发器
+ * @param {boolean} showToast 是否显示提示，默认为true
+ */
+function createEditTrigger(showToast = true) {
+  try {
+    // 检查是否已有触发器
+    const triggers = ScriptApp.getProjectTriggers();
+    let hasEditTrigger = false;
+    
+    triggers.forEach(trigger => {
+      if (trigger.getHandlerFunction() === 'onEdit') {
+        hasEditTrigger = true;
+      }
+    });
+
+    // 只有在没有触发器时才创建
+    if (!hasEditTrigger) {
+      const ss = SpreadsheetApp.getActive();
+      ScriptApp.newTrigger('onEdit')
+        .forSpreadsheet(ss)
+        .onEdit()
+        .create();
+      
+      if (showToast) {
+        SpreadsheetApp.getActive().toast('编辑触发器已安装', '提示', 3);
+      }
+    }
+  } catch (error) {
+    console.error('Error creating edit trigger:', error);
+    if (showToast) {
+      SpreadsheetApp.getActive().toast('触发器安装失败，请检查权限', '错误', 5);
+    }
   }
 }
 
