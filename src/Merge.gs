@@ -163,25 +163,25 @@ function mergeSheets(config, targetSheet) {
           var sourceValue = sourceRow[sourceIndex];
           
           // 从注释中获取原值
-          var note = targetRow.baseData[targetIndex];
-          var baseValue = note ? extractBaseValue(note) : currentValue;
+          var baseValue = targetRow.baseData[targetIndex];
           
-          if (currentValue !== sourceValue) {
-            if (currentValue === baseValue) {
-              // 目标值未被修改，可以直接使用源表的修改
-              updateColumns.push({
-                header: header,
-                sourceValue: sourceValue,
-                baseValue: baseValue
-              });
-            } else if (sourceValue !== baseValue) {
-              // 源表和目标表都做了修改，且修改不一致
+          // 修改冲突检测逻辑
+          if (sourceValue !== currentValue) {
+            // 如果源值和当前值不同，且当前值已被修改（与基准值不同）
+            if (currentValue !== baseValue && sourceValue !== baseValue) {
               hasConflict = true;
               conflictColumns.push({
                 header: header,
                 sourceValue: sourceValue,
                 targetValue: currentValue,
                 baseValue: baseValue
+              });
+            } else {
+              // 如果当前值未被修改，可以直接更新
+              updateColumns.push({
+                header: header,
+                sourceValue: sourceValue,
+                baseValue: sourceValue // 更新基准值为新的源值
               });
             }
           }

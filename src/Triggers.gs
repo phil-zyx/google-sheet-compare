@@ -31,7 +31,22 @@ function onUninstall(e) {
  */
 function createEditTrigger(showToast = true) {
   try {
-    // 检查是否已有触发器
+    // First try to get authorization
+    try {
+      ScriptApp.getProjectTriggers();
+    } catch (authError) {
+      // If we get a permissions error, show a more user-friendly message
+      if (showToast) {
+        SpreadsheetApp.getActive().toast(
+          '需要额外授权来安装触发器。请重新运行此脚本并接受权限请求。',
+          '需要授权',
+          10
+        );
+      }
+      return;
+    }
+
+    // Original trigger creation logic
     const triggers = ScriptApp.getProjectTriggers();
     let hasEditTrigger = false;
     
@@ -41,7 +56,6 @@ function createEditTrigger(showToast = true) {
       }
     });
 
-    // 只有在没有触发器时才创建
     if (!hasEditTrigger) {
       const ss = SpreadsheetApp.getActive();
       ScriptApp.newTrigger('onEdit')
@@ -56,7 +70,7 @@ function createEditTrigger(showToast = true) {
   } catch (error) {
     console.error('Error creating edit trigger:', error);
     if (showToast) {
-      SpreadsheetApp.getActive().toast('触发器安装失败，请检查权限', '错误', 5);
+      SpreadsheetApp.getActive().toast('触发器安装失败: ' + error.message, '错误', 5);
     }
   }
 }
