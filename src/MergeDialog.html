@@ -461,13 +461,10 @@
                 if (result.success) {
                     // 保存到本地状态
                     state.previewData = result;
-                    // 保存预览状态到服务器
-                    google.script.run.withSuccessHandler(() => {
-                        // 关闭对话框让用户查看预览
-                        closeDialog();
-                        // 显示提示
-                        google.script.run.showAlert(`预览表格已生成：${result.previewSheetName}\n请查看预览内容，确认无误后点击菜单"配置表工具 > 合并表格"继续。`);
-                    }).savePreviewState(result);
+                    // 关闭对话框让用户查看预览
+                    closeDialog();
+                    // 显示提示
+                    google.script.run.showAlert(`预览表格已生成：${result.previewSheetName}\n请查看预览内容，确认无误后点击菜单"配置表工具 > 合并表格"继续。`);
                 } else {
                     showStatus(result.message, true);
                 }
@@ -662,7 +659,7 @@
                             google.script.run
                                 .withSuccessHandler(function(previewState) {
                                     console.log('获取到预览状态:', previewState);
-                                    if (previewState && previewState.success) {
+                                    if (previewState && previewState.success !== false) {
                                         state.previewData = previewState;
                                         console.log('保存预览状态到本地:', state.previewData);
                                         showConfirmView();

@@ -244,6 +244,20 @@ function compareSheets(config) {
     // 激活预览表
     previewSheet.activate();
 
+    // 记录比较完成的日志
+    LogManager.addLog(
+      LOG_CONSTANTS.TYPES.COMPARE,
+      config.sheet1,
+      "比较完成",
+      `对比表格：${config.sheet2}\n` +
+      `差异总数：${differences.total}\n` +
+      `└─ 值不同：${differences.modified}\n` +
+      `└─ 新增项：${differences.added}\n` +
+      `└─ 删除项：${differences.removed}\n` +
+      `└─ 重复ID：${differences.duplicate}\n` +
+      `└─ 表头差异：${differences.headerDiff}`
+    );
+
     return {
       success: true,
       message: `比较完成！\n发现 ${differences.total} 处差异\n${differences.modified} 处值不同\n${differences.added} 处新增\n${differences.removed} 处删除\n${differences.duplicate} 处重复ID\n${differences.headerDiff} 处表头差异`,
@@ -386,10 +400,8 @@ function clearAllHighlights(showConfirm = true) {
  * 基于当前表格创建新的页签
  */
 function createNewSheetTab() {
-  console.log('开始创建新页签');
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var currentSheet = ss.getActiveSheet();
-  console.log('当前页签:', currentSheet.getName());
   
   // 弹出对话框让用户输入新页签名称
   var ui = SpreadsheetApp.getUi();
@@ -426,9 +438,8 @@ function createNewSheetTab() {
         return sheet.getName() === currentSheet.getName();
       });
       ss.setActiveSheet(newSheet);
-      console.log('切换到新页签:', newSheet.getName());
       ss.moveActiveSheet(currentIndex + 2);
-      console.log('移动页签完成');
+      
       // 清除所有标记和系统注释
       clearAllMarks(false);  // 传入 false 以跳过确认对话框
       
@@ -449,12 +460,18 @@ function createNewSheetTab() {
           .join('\n')
       );
       a1Cell.setNote(newNote);
-      console.log('添加创建记录到A1单元格');
       
       // 清除缓存以确保getSheetInfo()返回最新数据
       var cache = CacheService.getScriptCache();
       cache.remove('sheet_info');
-      console.log('清除sheet_info缓存');
+      
+      // 记录创建成功日志
+      LogManager.addLog(
+        LOG_CONSTANTS.TYPES.SHEET_CREATE,
+        newSheetName,
+        "创建页签成功",
+        `来源页签：${currentSheet.getName()}`
+      );
       
       ui.alert('成功', '已创建新页签："' + newSheetName + '"', ui.ButtonSet.OK);
     } catch (error) {
