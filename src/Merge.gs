@@ -274,6 +274,17 @@ function mergeSheets(config, targetSheet) {
       });
     });
 
+    // 在合并成功后记录日志
+    LogManager.addLog(
+      LOG_CONSTANTS.TYPES.MERGE,
+      config.sourceSheet,
+      "生成合并预览成功",
+      `目标表格：${targetSheetName}\n` +
+      `新增行数：${changes.newRows.length}\n` +
+      `更新行数：${changes.updates.length}\n` +
+      `冲突行数：${changes.conflicts.length}`
+    );
+
     return {
       success: true,
       message: `合并完成\n新增行数: ${changes.newRows.length}\n更新行数: ${changes.updates.length}\n冲突行数: ${changes.conflicts.length}`,
@@ -355,8 +366,7 @@ function confirmMergeFromPreview(sourceSheetName, targetSheetName, previewSheetN
           var targetCell = targetSheet.getRange(i + 1, j + 1);
           targetCell.setValue(previewData[i][j]);
           targetCell.setNote(previewNotes[i][j]);
-          // 可以选择设置一个统一的、较淡的背景色来标识已合并的单元格
-          targetCell.setBackground('#f5f5f5');  // 或者完全不设置背景色
+          targetCell.setBackground(MERGE_CONSTANTS.COLORS.MERGED);  // 或者完全不设置背景色
         }
       }
     }
@@ -380,6 +390,14 @@ function confirmMergeFromPreview(sourceSheetName, targetSheetName, previewSheetN
     
     // 6. 激活目标页签
     targetSheet.activate();
+    
+    // 记录确认合并成功的日志
+    LogManager.addLog(
+      LOG_CONSTANTS.TYPES.MERGE,
+      sourceSheetName,
+      "确认合并成功",
+      `目标表格：${targetSheetName}`
+    );
     
     return {
       success: true,

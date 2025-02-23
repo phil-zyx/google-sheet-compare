@@ -246,12 +246,10 @@ function clearAllMarks(showConfirm = true) {
               currentBg === COMPARE_CONSTANTS.COLORS.HEADER_MODIFIED ||
               currentBg === SHEET_CONSTANTS.COLORS.MODIFIED ||
               currentBg === SHEET_CONSTANTS.COLORS.ADDED ||
-              currentBg === SHEET_CONSTANTS.COLORS.REMOVED ||
-              currentBg === SHEET_CONSTANTS.COLORS.HEADER_MODIFIED ||
-              currentBg === SHEET_CONSTANTS.COLORS.CONFLICT ||
               currentBg === MERGE_CONSTANTS.COLORS.NEW ||
               currentBg === MERGE_CONSTANTS.COLORS.CONFLICT ||
               currentBg === MERGE_CONSTANTS.COLORS.UPDATED ||
+              currentBg === MERGE_CONSTANTS.COLORS.MERGED ||
               currentBg === MERGE_CONSTANTS.COLORS.RESOLVED) {
             backgroundRow.push(null);
           } else {

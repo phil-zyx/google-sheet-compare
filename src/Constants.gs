@@ -5,11 +5,9 @@ const SHEET_CONSTANTS = {
   COLORS: {
     MODIFIED: "#b3e5fc",  // 修改 - 浅蓝色
     ADDED: "#dcedc8",    // 新增 - 淡绿色
-    REMOVED: "#ffdce0",  // 删除 - Git风格浅红色
     HEADER_MODIFIED: "#fff9c4",  // 表头修改 - 浅黄色
     CONFLICT: "#f8bbd0"  // 冲突 - 粉色
-  },
-  CACHE_DURATION: 600
+  }
 };
 
 // 合并相关常量
@@ -18,20 +16,11 @@ const MERGE_CONSTANTS = {
   CONFLICT_PREFIX: '冲突: ',
   PREVIEW_SUFFIX: '_预览',
   COLORS: {
-    NEW: '#b7e1cd',      // 浅绿色 - 新行
+    NEW: '#dcedc8',      // 浅绿色 - 新行
     CONFLICT: '#ffdce0', // 浅红色 - 冲突
-    UPDATED: '#c9daf8',  // 浅蓝色 - 已更新
-    RESOLVED: "#e8f5e9"  // 已解决 - 更浅的绿色
-  },
-  CACHE_KEYS: {
-    MERGE_STATE: "merge_state",
-    CURRENT_CONFLICTS: "current_conflicts"
-  },
-  RESOLUTION_TYPES: {
-    SOURCE: "source",
-    TARGET: "target",
-    CUSTOM: "custom",
-    AUTO: "auto"
+    UPDATED: '#b3e5fc',  // 浅蓝色 - 已更新
+    RESOLVED: "#e8f5e9", // 已解决 - 更浅的绿色
+    MERGED: "#dfcd4d"    // 合并入表 - 橘色
   }
 };
 
@@ -39,11 +28,10 @@ const MERGE_CONSTANTS = {
 const COMPARE_CONSTANTS = {
   COLORS: {
     MODIFIED: "#ffcdd2",  // 修改 - 浅红色
-    ADDED: "#c8e6c9",    // 新增 - 浅绿色
+    ADDED: "#dcedc8",    // 新增 - 浅绿色
     REMOVED: "#ffdce0",  // 删除 - Git风格浅红色
     HEADER_MODIFIED: "#fff9c4"  // 表头修改 - 浅黄色
-  },
-  CACHE_DURATION: 600
+  }
 };
 
 // ID检查器相关常量
@@ -71,6 +59,34 @@ const NOTE_CONSTANTS = {
   // 添加分隔符常量
   KEY_VALUE_SEPARATOR: ': ',  // 键值分隔符
   LINE_SEPARATOR: '\n'        // 行分隔符
+};
+
+// 日志相关常量
+const LOG_CONSTANTS = {
+  SHEET_NAME: "配置表工具操作日志表",
+  HEADERS: [
+    "时间",
+    "操作类型",
+    "操作人",
+    "操作表名",
+    "操作内容",
+    "详细信息"
+  ],
+  TYPES: {
+    MERGE: "合并操作",
+    COMPARE: "比较操作",
+    CONFLICT_RESOLVE: "冲突解决",
+    SHEET_CREATE: "创建表格",
+    SHEET_UPDATE: "更新表格",
+    SHEET_DELETE: "删除表格"
+  },
+  // 日志保留配置
+  RETENTION: {
+    MAX_ROWS: 10000,        // 最大保留行数
+    CLEANUP_THRESHOLD: 0.9,  // 清理阈值（当达到最大行数的90%时触发清理）
+    CLEANUP_TARGET: 0.7,     // 清理目标（清理后保留最大行数的70%）
+    MIN_DAYS: 30            // 最小保留天数（无论行数多少，30天内的日志都保留）
+  }
 };
 
 // --------------------- 常量 --------------------------------
@@ -264,3 +280,158 @@ class NoteManager {
 } 
 
 // --------------------- NoteManager ------------------------ 
+
+// --------------------- LogManager ------------------------ 
+
+/**
+ * 日志管理工具类
+ */
+class LogManager {
+  /**
+   * 初始化日志表
+   * @private
+   * @returns {Sheet} 日志表对象
+   */
+  static _initLogSheet() {
+    const ss = SpreadsheetApp.getActive();
+    let sheet = ss.getSheetByName(LOG_CONSTANTS.SHEET_NAME);
+    
+    if (!sheet) {
+      sheet = ss.insertSheet(LOG_CONSTANTS.SHEET_NAME);
+      sheet.getRange(1, 1, 1, LOG_CONSTANTS.HEADERS.length)
+        .setValues([LOG_CONSTANTS.HEADERS])
+        .setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
+    
+    return sheet;
+  }
+
+  /**
+   * 添加日志记录
+   * @param {string} type 操作类型（使用 LOG_CONSTANTS.TYPES 中的值）
+   * @param {string} sheetName 操作的表名
+   * @param {string} action 操作内容
+   * @param {string} [details=''] 详细信息（可选）
+   */
+  static addLog(type, sheetName, action, details = '') {
+    const sheet = this._initLogSheet();
+    const user = Session.getActiveUser().getEmail();
+    const timestamp = new Date().toLocaleString("zh-CN");
+    
+    const logRow = [
+      timestamp,
+      type,
+      user,
+      sheetName,
+      action,
+      details
+    ];
+    
+    // 在第二行插入新日志（保持表头在第一行）
+    sheet.insertRowAfter(1);
+    sheet.getRange(2, 1, 1, logRow.length).setValues([logRow]);
+
+    // 检查是否需要清理日志
+    this._checkAndCleanupLogs(sheet);
+  }
+
+  /**
+   * 检查并清理日志
+   * @private
+   * @param {Sheet} sheet 日志表对象
+   */
+  static _checkAndCleanupLogs(sheet) {
+    const currentRows = sheet.getLastRow();
+    const threshold = LOG_CONSTANTS.RETENTION.MAX_ROWS * LOG_CONSTANTS.RETENTION.CLEANUP_THRESHOLD;
+    
+    // 如果当前行数超过阈值，触发清理
+    if (currentRows > threshold) {
+      const targetRows = Math.floor(LOG_CONSTANTS.RETENTION.MAX_ROWS * LOG_CONSTANTS.RETENTION.CLEANUP_TARGET);
+      const data = sheet.getDataRange().getValues();
+      
+      // 确保保留表头
+      if (data.length <= 1) return;
+      
+      // 计算最小保留日期
+      const minDate = new Date();
+      minDate.setDate(minDate.getDate() - LOG_CONSTANTS.RETENTION.MIN_DAYS);
+      
+      // 从后往前查找需要保留的最后一行
+      let deleteFromRow = data.length;
+      let foundDeleteRow = false;
+      
+      for (let i = data.length - 1; i > 1; i--) {
+        const logDate = new Date(data[i][0]);
+        
+        // 如果找到了一行需要删除的数据（在最小保留日期之前，且超出目标行数）
+        if (logDate < minDate && i > targetRows) {
+          deleteFromRow = i;
+          foundDeleteRow = true;
+          break;
+        }
+      }
+      
+      // 如果需要删除行
+      if (deleteFromRow < data.length) {
+        const rowsToDelete = data.length - deleteFromRow;
+        sheet.deleteRows(deleteFromRow + 1, rowsToDelete);
+        
+        // 记录清理操作（插入到第二行）
+        const newLog = [
+          new Date().toLocaleString("zh-CN"),
+          "系统维护",
+          "系统",
+          LOG_CONSTANTS.SHEET_NAME,
+          "日志清理",
+          `清理了 ${rowsToDelete} 条历史日志记录`
+        ];
+        sheet.insertRowAfter(1);
+        sheet.getRange(2, 1, 1, newLog.length).setValues([newLog]);
+      }
+    }
+  }
+
+  /**
+   * 手动触发日志清理
+   * @param {number} [days=30] 保留天数
+   */
+  static manualCleanup(days = LOG_CONSTANTS.RETENTION.MIN_DAYS) {
+    const sheet = this._initLogSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    if (data.length <= 1) return; // 只有表头或空表，直接返回
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    // 从后往前查找需要删除的行
+    let deleteFromRow = data.length;
+    for (let i = data.length - 1; i > 1; i--) {
+      const logDate = new Date(data[i][0]);
+      if (logDate < cutoffDate) {
+        deleteFromRow = i;
+        break;
+      }
+    }
+    
+    if (deleteFromRow < data.length) {
+      const rowsToDelete = data.length - deleteFromRow;
+      sheet.deleteRows(deleteFromRow + 1, rowsToDelete);
+      
+      // 记录清理操作（插入到第二行）
+      const newLog = [
+        new Date().toLocaleString("zh-CN"),
+        "系统维护",
+        "系统",
+        LOG_CONSTANTS.SHEET_NAME,
+        "手动日志清理",
+        `清理了 ${rowsToDelete} 条${days}天前的历史日志记录`
+      ];
+      sheet.insertRowAfter(1);
+      sheet.getRange(2, 1, 1, newLog.length).setValues([newLog]);
+    }
+  }
+}
+
+// --------------------- LogManager ------------------------ 
