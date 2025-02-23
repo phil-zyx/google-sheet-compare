@@ -82,6 +82,65 @@ const NOTE_CONSTANTS = {
  */
 class NoteManager {
   /**
+   * 提取系统注释，自动合并多个系统注释块
+   */
+  static extractSystemNotes(note) {
+    if (!note) return {};
+    
+    const systemNotes = {};
+    let currentPosition = 0;
+    let hasMultipleBlocks = false;
+    
+    // 查找所有系统注释块并合并
+    while (true) {
+      const start = note.indexOf(NOTE_CONSTANTS.SYSTEM_NOTE_START, currentPosition);
+      if (start === -1) break;
+      
+      const end = note.indexOf(NOTE_CONSTANTS.SYSTEM_NOTE_END, start);
+      if (end === -1) break;
+      
+      // 如果不是第一个块，标记存在多个块
+      if (currentPosition > 0) {
+        hasMultipleBlocks = true;
+      }
+      
+      const notesSection = note.substring(
+        start + NOTE_CONSTANTS.SYSTEM_NOTE_START.length,
+        end
+      );
+
+      const noteRegex = /^(.+?):\s*\n([\s\S]*?)(?=\n\w+:|$)/gm;
+      let match;
+      
+      while ((match = noteRegex.exec(notesSection)) !== null) {
+        const [, key, value] = match;
+        systemNotes[key.trim()] = value.trim();
+      }
+      
+      currentPosition = end + NOTE_CONSTANTS.SYSTEM_NOTE_END.length;
+    }
+    
+    // 如果发现多个块，自动清理并重写注释
+    if (hasMultipleBlocks) {
+      const cleanNote = this.removeAllSystemNotes(note);
+      const systemPart = this.formatSystemNotes(systemNotes);
+      const newNote = this.appendSystemNote(cleanNote, systemPart);
+      
+      // 如果是在单元格上下文中，尝试更新单元格注释
+      try {
+        const cell = SpreadsheetApp.getActiveRange();
+        if (cell) {
+          cell.setNote(newNote);
+        }
+      } catch (e) {
+        // 忽略错误，因为可能不在单元格上下文中
+      }
+    }
+    
+    return systemNotes;
+  }
+
+  /**
    * 添加系统注释
    */
   static addSystemNote(originalNote, type, content) {
@@ -90,11 +149,12 @@ class NoteManager {
       throw new Error('Type and content are required');
     }
     
+    // 直接使用 extractSystemNotes 进行合并处理
     const systemNotes = this.extractSystemNotes(originalNote);
     systemNotes[type] = content;
     
     const systemPart = this.formatSystemNotes(systemNotes);
-    return this.appendSystemNote(originalNote, systemPart);
+    return this.appendSystemNote(this.removeAllSystemNotes(originalNote), systemPart);
   }
   
   /**
@@ -141,35 +201,6 @@ class NoteManager {
       .join(NOTE_CONSTANTS.LINE_SEPARATOR);
     
     return `${NOTE_CONSTANTS.SYSTEM_NOTE_START}${formattedNotes}${NOTE_CONSTANTS.SYSTEM_NOTE_END}`;
-  }
-  
-  /**
-   * 提取系统注释
-   */
-  static extractSystemNotes(note) {
-    if (!note) return {};
-    
-    const start = note.indexOf(NOTE_CONSTANTS.SYSTEM_NOTE_START);
-    const end = note.indexOf(NOTE_CONSTANTS.SYSTEM_NOTE_END);
-    
-    if (start === -1 || end === -1) return {};
-    
-    const notesSection = note.substring(
-      start + NOTE_CONSTANTS.SYSTEM_NOTE_START.length,
-      end
-    );
-
-    const systemNotes = {};
-    // 使用正则表达式来更准确地分割注释
-    const noteRegex = /^(.+?):\s*\n([\s\S]*?)(?=\n\w+:|$)/gm;
-    let match;
-    
-    while ((match = noteRegex.exec(notesSection)) !== null) {
-      const [, key, value] = match;
-      systemNotes[key.trim()] = value.trim();
-    }
-    
-    return systemNotes;
   }
   
   /**
