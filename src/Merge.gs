@@ -32,12 +32,13 @@ function mergeSheets(config, targetSheet) {
     var sourceData = sourceRange.getValues();
     var targetData = targetRange.getValues();
     
-    // 获取注释
-    var targetNotes = targetRange.getNotes();
-    
-    // 获取基准数据（从系统注释中）
-    var baseData = targetNotes.map(row => 
-      row.map(note => NoteManager.getSystemNote(note, NOTE_CONSTANTS.TYPES.BASE_VALUE))
+    // 获取源表的注释（用于获取基准值）
+    var sourceNotes = sourceRange.getNotes();
+    var sourceBaseData = sourceNotes.map(row => 
+      row.map(note => {
+        var baseValue = NoteManager.getSystemNote(note, NOTE_CONSTANTS.TYPES.BASE_VALUE);
+        return baseValue;
+      })
     );
     
     // 获取表头
@@ -122,7 +123,6 @@ function mergeSheets(config, targetSheet) {
         targetDataMap.set(id.toString(), {
           rowIndex: i,
           data: targetData[i],
-          baseData: baseData[i] // 包含原值信息的注释
         });
       }
     }
@@ -159,31 +159,48 @@ function mergeSheets(config, targetSheet) {
           
           if (targetIndex === -1) continue; // 跳过目标表中不存在的列
           
+          // 目标表中的当前值
           var currentValue = targetRow.data[targetIndex];
+          // 当前表的当前值
           var sourceValue = sourceRow[sourceIndex];
+          // 当前表中标记的 base
+          var sourceBaseValue = sourceBaseData[i][sourceIndex];
           
-          // 从注释中获取原值
-          var baseValue = targetRow.baseData[targetIndex];
-          
-          // 修改冲突检测逻辑
-          if (sourceValue !== currentValue) {
-            // 如果源值和当前值不同，且当前值已被修改（与基准值不同）
-            if (currentValue !== baseValue && sourceValue !== baseValue) {
-              hasConflict = true;
-              conflictColumns.push({
-                header: header,
-                sourceValue: sourceValue,
-                targetValue: currentValue,
-                baseValue: baseValue
-              });
-            } else {
-              // 如果当前值未被修改，可以直接更新
-              updateColumns.push({
-                header: header,
-                sourceValue: sourceValue,
-                baseValue: sourceValue // 更新基准值为新的源值
-              });
+          // 标准化值
+          function normalizeValue(value) {
+            if (value === null || value === undefined) return '';
+            
+            // 如果是数字或者可以转换为数字
+            const num = Number(value);
+            if (!isNaN(num)) {
+              // 对于整数，返回整数字符串
+              if (Number.isInteger(num)) {
+                return String(num);
+              }
+              // 对于小数，统一格式化（去除末尾的0）
+              return String(parseFloat(num.toFixed(10)));
             }
+            
+            // 非数字类型，转换为字符串
+            return String(value);
+          }
+          
+          // 检查源表和目标表是否都进行了修改
+          var sourceModified = sourceBaseValue && normalizeValue(sourceValue) !== normalizeValue(sourceBaseValue);
+          if (sourceModified && normalizeValue(sourceBaseValue) !== normalizeValue(currentValue)) {
+            hasConflict = true;
+            conflictColumns.push({
+              header: header,
+              sourceValue: sourceValue,
+              targetValue: currentValue,
+              sourceBaseValue: sourceBaseValue,
+            });
+          } else if (sourceModified) {
+            updateColumns.push({
+              header: header,
+              sourceValue: sourceValue,
+              baseValue: sourceValue // 更新基准值为新的源值
+            });
           }
         }
         

@@ -83,12 +83,13 @@ const NOTE_CONSTANTS = {
 class NoteManager {
   /**
    * 添加系统注释
-   * @param {string} originalNote 原始注释
-   * @param {string} type 注释类型
-   * @param {string} content 注释内容
-   * @returns {string} 新的注释内容
    */
   static addSystemNote(originalNote, type, content) {
+    // 添加参数验证
+    if (!type || content === undefined) {
+      throw new Error('Type and content are required');
+    }
+    
     const systemNotes = this.extractSystemNotes(originalNote);
     systemNotes[type] = content;
     
@@ -144,9 +145,6 @@ class NoteManager {
   
   /**
    * 提取系统注释
-   * @private
-   * @param {string} note 完整注释
-   * @returns {Object} 系统注释对象
    */
   static extractSystemNotes(note) {
     if (!note) return {};
@@ -162,12 +160,14 @@ class NoteManager {
     );
 
     const systemNotes = {};
-    notesSection.split(NOTE_CONSTANTS.LINE_SEPARATOR).forEach(line => {
-      const [key, ...valueParts] = line.split(NOTE_CONSTANTS.KEY_VALUE_SEPARATOR);
-      if (key && valueParts.length > 0) {
-        systemNotes[key.trim()] = valueParts.join(NOTE_CONSTANTS.KEY_VALUE_SEPARATOR).trim();
-      }
-    });
+    // 使用正则表达式来更准确地分割注释
+    const noteRegex = /^(.+?):\s*\n([\s\S]*?)(?=\n\w+:|$)/gm;
+    let match;
+    
+    while ((match = noteRegex.exec(notesSection)) !== null) {
+      const [, key, value] = match;
+      systemNotes[key.trim()] = value.trim();
+    }
     
     return systemNotes;
   }
